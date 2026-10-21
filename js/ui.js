@@ -97,6 +97,7 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
   g.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const grp = g.dataset.group, v = b.dataset.v;
+    if (grp === 'page') { setPage(v); return; }
     if (grp === 'nonideal' || grp === 'sync') state[grp] = v === '1'; else state[grp] = v;
     if (grp === 'view') { state.hpos = v === 'steady' ? 0.1 : 0; $('#hposRange').value = state.hpos; state.tdiv = 'auto'; $('#tdivSel').value = 'auto'; }
     if (grp === 'topo' || grp === 'sync') buildSchem();
@@ -104,6 +105,20 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
     updateSegs(); updateNonIdealUI(); requestCompute();
   });
 });
+
+// Switch between the Converter and Control pages. Each page keeps its channels and time base.
+function setPage(pg, noCompute) {
+  if (pg !== 'converter' && pg !== 'control') return;
+  const old = state.pages[state.page];
+  old.tdiv = state.tdiv; old.hpos = state.hpos;
+  state.page = pg;
+  const cur = state.pages[pg];
+  state.ch = cur.ch; state.tdiv = cur.tdiv; state.hpos = cur.hpos;
+  $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
+  document.body.dataset.page = pg;
+  buildChannels(); updateSegs(); updateNonIdealUI();
+  if (!noCompute) requestCompute();
+}
 
 document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.preset;
@@ -169,15 +184,22 @@ function sizeCanvas(cv, cssH) {
   cv.width = Math.max(10, Math.round(w * dpr));
   cv.height = Math.round(cssH * dpr);
 }
+// Draw right away after resizing: setting canvas.width clears it, and waiting for the
+// next animation frame would show one blank frame.
 function resize() {
   const w = els.screen.clientWidth;
   sizeCanvas(els.scope, Math.round(clamp(w * 0.56, 260, 560)));
-  sizeCanvas(els.mm, 210);
-  renderLive();
-  if (RES) drawModeMap();
+  if (RES) renderLiveNow();
+  drawPageCanvas(true);
 }
 new ResizeObserver(() => resize()).observe(els.screen);
-new ResizeObserver(() => { if (RES) { sizeCanvas(els.mm, 210); drawModeMap(); } }).observe(els.mm.parentElement);
+new ResizeObserver(() => drawPageCanvas(true)).observe(els.mm.parentElement);
+// The canvas of the side panel on the current page (mode map or Bode plot).
+function drawPageCanvas(resized) {
+  if (!RES) return;
+  if (state.page === 'control') { if (resized) sizeBode(); drawBode(); }
+  else { if (resized) sizeCanvas(els.mm, 210); drawModeMap(); }
+}
 /* ---------- light / night theme ---------- */
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
 function curTheme() { return document.documentElement.dataset.theme || (darkMQ.matches ? 'dark' : 'light'); }
@@ -189,11 +211,12 @@ function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('dcdc-theme', t); } catch (e) { /* storage blocked: theme still applies for this visit */ }
   updateThemeSeg();
-  if (RES) drawModeMap();
+  drawPageCanvas();
 }
 try { const t = localStorage.getItem('dcdc-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
+{ const t = new URLSearchParams(location.search).get('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; }
 document.querySelectorAll('#themeSeg button').forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.t)));
-darkMQ.addEventListener('change', () => { updateThemeSeg(); if (RES) drawModeMap(); });
+darkMQ.addEventListener('change', () => { updateThemeSeg(); drawPageCanvas(); });
 updateThemeSeg();
 
 /* ---------- render scheduling ---------- */
@@ -204,6 +227,15 @@ function requestCompute() {
 }
 function renderLive() {
   if (pendingRender) return; pendingRender = true;
-  requestAnimationFrame(() => { pendingRender = false; if (!RES) return; renderScope(); renderReadout(); renderSchem(); });
+  requestAnimationFrame(() => { pendingRender = false; if (RES) renderLiveNow(); });
 }
-function renderAll() { if (!RES) return; renderScope(); renderReadout(); renderSchem(); renderTheory(); drawModeMap(); }
+function renderLiveNow() {
+  renderScope(); renderReadout();
+  if (state.page === 'control') renderControlLive(); else renderSchem();
+}
+function renderAll() {
+  if (!RES) return;
+  renderScope(); renderReadout();
+  if (state.page === 'control') { renderControl(); drawBode(); }
+  else { renderSchem(); renderTheory(); drawModeMap(); }
+}

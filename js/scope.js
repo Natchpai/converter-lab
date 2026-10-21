@@ -13,7 +13,7 @@ let RES = null;
 let dpr = window.devicePixelRatio || 1;
 
 function compute() {
-  RES = computeRes(effParams(), state.view, state.win);
+  RES = state.page === 'control' ? computeControl() : computeRes(effParams(), state.view, state.win);
 }
 
 /* ---------- time window of the scope ---------- */

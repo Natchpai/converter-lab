@@ -155,3 +155,11 @@ table.eq td.tag { font-size: 13px; color: var(--muted); width: 1%; white-space: 
 .warn { color: var(--dcm); font-size: 14px; }
 footer { max-width: 1680px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 14px; }
 #selftest { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
+
+/* ---- page switch: Converter | Control ---- */
+body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { display: none !important; }
+.seg.page button[aria-pressed="true"] { font-weight: 700; }
+.bode { grid-area: schem; }
+.design { grid-area: theory; }
+#bodeWrap { position: relative; }
+#bode { width: 100%; display: block; touch-action: none; }

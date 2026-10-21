@@ -7,6 +7,8 @@ syncAllParams();
 buildChannels();
 buildTimeControls();
 buildSchem();
+buildControlUI();
+if (new URLSearchParams(location.search).get('page') === 'control') setPage('control', true);
 updateSegs();
 updateNonIdealUI();
 compute();

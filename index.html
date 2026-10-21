@@ -6,12 +6,15 @@
 <title>DC-DC Converter Lab (large text)</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
+<body data-page="converter">
 
 <header class="top">
   <div class="brand">
     <h1>DC-DC Converter Lab</h1>
     <span>Buck, Boost and Buck-Boost in CCM and DCM, with a 4-channel scope</span>
+  </div>
+  <div class="seg page" data-group="page" role="group" aria-label="Page">
+    <button data-v="converter">Converter</button><button data-v="control">Control</button>
   </div>
   <div class="seg" data-group="topo" role="group" aria-label="Topology">
     <button data-v="buck">Buck</button><button data-v="boost">Boost</button><button data-v="bb">Buck-Boost</button>
@@ -22,7 +25,7 @@
   <div class="seg" data-group="sync" role="group" aria-label="Rectifier">
     <button data-v="0">Async (diode)</button><button data-v="1">Sync (MOSFET)</button>
   </div>
-  <div class="seg" data-group="view" role="group" aria-label="View">
+  <div class="seg convOnly" data-group="view" role="group" aria-label="View">
     <button data-v="steady">Steady state</button><button data-v="startup">Startup</button>
   </div>
   <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
@@ -40,6 +43,7 @@
       <button class="btn" data-preset="dcm" title="Set R so the converter runs in DCM">DCM example</button>
       <button class="btn" data-preset="reset">Reset</button>
     </div>
+    <div class="ctlOnly" id="ctlSide"></div>
     <h2>Non-ideal parts</h2>
     <p class="hint" id="nonIdealHint">Select <b>Non-ideal</b> at the top to use these values.</p>
     <div id="nonIdealList"></div>
@@ -55,23 +59,24 @@
       <div class="seg small" data-group="layout" role="group" aria-label="Scope layout">
         <button data-v="split">Split</button><button data-v="overlay">Overlay</button>
       </div>
-      <label><input type="checkbox" id="theoryChk" checked> Theory overlay</label>
+      <label class="convOnly"><input type="checkbox" id="theoryChk" checked> Theory overlay</label>
       <label><input type="checkbox" id="shadeChk" checked> Shade intervals</label>
     </div>
     <div class="scopeHead">
       <label>Time/div <select id="tdivSel"></select></label>
       <label style="flex:1 1 160px">Position <input type="range" id="hposRange" min="0" max="1" step="0.005" value="0.1"></label>
-      <label id="winWrap">Startup window <select id="winSel"></select></label>
+      <label id="winWrap" class="convOnly">Startup window <select id="winSel"></select></label>
     </div>
     <div class="screen" id="screen"><canvas id="scope" aria-label="Oscilloscope screen"></canvas></div>
     <div class="curInfo" id="curInfo"></div>
     <div class="chanRow" id="chanRow"></div>
     <div class="tblWrap"><table class="data" id="measTbl"></table></div>
-    <p class="hint">Drag on the screen to move cursor C1 (near C2 to move C2). The circuit below follows C1.
+    <p class="hint convOnly">Drag on the screen to move cursor C1 (near C2 to move C2). The circuit below follows C1.
       Measurements use one full period in steady state, or the visible window in startup.</p>
+    <p class="hint ctlOnly">Drag on the screen to move cursor C1 (near C2 to move C2). Measurements use the visible window.</p>
   </section>
 
-  <section class="schem panel">
+  <section class="schem panel convOnly">
     <h2>Circuit at cursor C1</h2>
     <div id="schemSvg"></div>
     <div class="legend">
@@ -82,7 +87,7 @@
     <div class="info" id="schemInfo"></div>
   </section>
 
-  <section class="theory panel">
+  <section class="theory panel convOnly">
     <h2>Theory vs simulation</h2>
     <div class="tblWrap"><table class="data" id="cmpTbl"></table></div>
     <p class="warn" id="simWarn"></p>
@@ -92,6 +97,17 @@
     <canvas id="modemap" aria-label="CCM and DCM mode map"></canvas>
     <h3>What to look at</h3>
     <ul class="tips" id="tips"></ul>
+  </section>
+
+  <section class="bode panel ctlOnly" id="bodePanel">
+    <h2>Bode plot</h2>
+    <div id="bodeWrap"><canvas id="bode" aria-label="Bode plot of the control loop"></canvas></div>
+    <div id="bodeInfo"></div>
+  </section>
+
+  <section class="design panel ctlOnly" id="designPanel">
+    <h2>Control design</h2>
+    <div id="designBody"></div>
   </section>
 </main>
 
@@ -113,6 +129,7 @@
 <script src="js/theorypanel.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/selftest.js"></script>
+<script src="js/control-ui.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

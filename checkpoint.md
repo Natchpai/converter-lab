@@ -17,7 +17,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 |---|---|---|
 | 0 | git init, baseline commit on main, branch | done |
 | 1 | Split index.html into css/js files, Node test runner | done |
-| 2 | Page switch scaffold (Converter / Control) | todo |
+| 2 | Page switch scaffold (Converter / Control) | done |
 | 3 | Model hooks, complex helpers, averaged plant, Bode (plant) | todo |
 | 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | todo |
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | todo |
@@ -47,6 +47,24 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
   the canvas, and redraws one frame later via rAF. Headless screenshots sometimes catch the
   blank canvas. Fix in Phase 2 by drawing synchronously in `resize()`.
 
+### Phase 2: page switch scaffold
+- Header seg `data-group="page"` (Converter | Control) sets `body[data-page]`; CSS classes
+  `.convOnly` / `.ctlOnly` hide page-specific parts. New panels `.bode` (grid area
+  `schem`) and `.design` (grid area `theory`), side box `#ctlSide`.
+- `state.page`, `state.pages[page] = { ch, tdiv, hpos }`: each page keeps its channels and
+  time base. `setPage()` in ui.js. `compute()` calls `computeControl()` on the Control page.
+- `renderLiveNow()` / `renderAll()` dispatch per page; `drawPageCanvas()` draws the mode
+  map or the Bode plot (used by resize and theme change).
+- `resize()` now draws synchronously (fixes the blank-frame race from Phase 1).
+- URL query: `?page=control`, `?theme=light|dark` (handy for screenshots).
+- `js/control-ui.js`: `CTL` object, placeholders `buildControlUI`, `computeControl`
+  (open-loop steady state for now), `renderControl`, `renderControlLive`, `sizeBode`, `drawBode`.
+- Checks:
+  - VERIFIED: Node and headless Edge self-test lines identical to the baseline.
+  - VERIFIED: screenshots of both pages (1400 px dark, phone light) render traces.
+  - Note: headless Edge has a minimum viewport near 500 px; a 390 px capture is cropped (same
+    for the baseline). Use ~500 px for phone checks.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -56,6 +74,5 @@ Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
 
 ## Next step
 
-Phase 2: header `Converter | Control` switch, `body[data-page]`, empty Control panels
-(`.bode` in grid area `schem`, `.design` in grid area `theory`), per-page render dispatch,
-per-page channels, resize fix.
+Phase 3: `makeModel` hooks (`m.der`, `m.vout`, `p.Ix`), `js/cplx.js`, `js/plant.js`
+(averaged CCM plant, DCM reduced order, D0 solve), Bode canvas with the plant curve.

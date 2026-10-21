@@ -52,6 +52,20 @@ const state = {
     { on: true, sig: 'vsw', scale: 'auto', pos: 0, ac: false },
     { on: true, sig: 'vo',  scale: 'auto', pos: 0, ac: false },
   ],
+  page: 'converter',
+};
+// Each page keeps its own channel setup and time base.
+state.pages = {
+  converter: { ch: state.ch, tdiv: 'auto', hpos: 0.1 },
+  control: {
+    ch: [
+      { on: true, sig: 'vo',   scale: 'auto', pos: 0, ac: false },
+      { on: true, sig: 'iL',   scale: 'auto', pos: 0, ac: false },
+      { on: true, sig: 'vsw',  scale: 'auto', pos: 0, ac: false },
+      { on: true, sig: 'gate', scale: 'auto', pos: 0, ac: false },
+    ],
+    tdiv: 'auto', hpos: 0,
+  },
 };
 function resetParams() { for (const d of [...PARAMS, ...NONIDEAL]) state.p[d.k] = d.def; }
 resetParams();
