@@ -11,7 +11,7 @@ function plantMarks(p, pl) {
   const m = [];
   if (pl.kind === 'ccm') m.push({ f: pl.w0 / TWO_PI, text: 'f0' });
   else if (pl.kind === 'dcm') m.push({ f: pl.wp / TWO_PI, text: 'fp' });
-  else if (isFinite(pl.fp)) m.push({ f: pl.fp, text: 'fp' });
+  else if (pl.ok !== false && isFinite(pl.fp)) m.push({ f: pl.fp, text: 'fp' });   // PCMC: only at a steady state
   for (const z of pl.zeros) m.push({ f: Math.hypot(z.re, z.im) / TWO_PI, text: z.re > 0 ? 'fRHP' : 'fESR', rhp: z.re > 0 });
   return m;
 }
@@ -61,6 +61,7 @@ function buildLoop(p, cfg) {
   const fc = L.m.fc, rhp = L.marks.find(m => m.rhp);
   if (!L.reach) L.warn.push(`Target ${fmtSI(cfg.Vt, 'V')} is not reachable (max about ${fmtSI(L.Vmax, 'V')} with these parts).`);
   if (L.D0 > cfg.Dmax) L.warn.push(`The needed duty ${L.D0.toFixed(3)} is above Dmax = ${cfg.Dmax}.`);
+  if (pc && L.D0 < (cfg.tb || 0)) L.warn.push(`The needed duty ${L.D0.toFixed(3)} is below the blanking time t<sub>b</sub>/T = ${cfg.tb}: the minimum on-time sets the duty and V<sub>o</sub> goes above the target.`);
   if (pc && Cx.abs(pl.lamC) >= 1) L.warn.push(`Subharmonic oscillation: the current-loop pole α = ${pl.lamC.re.toFixed(2)} is outside the unit circle (|α| ≥ 1). Raise Se: it must be above (Sf − Sn)/2; Se = Sf/2 works for any D.`);
   else if (pc && pl.Qp > 2) L.warn.push(`Qp = ${pl.Qp.toFixed(1)}: the double pole at fs/2 is sharp, close to subharmonic oscillation. Add slope compensation.`);
   if (pc && !pl.ok) L.warn.push('The peak-current operating point did not converge (duty limit or no steady state).');

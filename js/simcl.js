@@ -71,7 +71,8 @@ const CL_EVENTS = {
 // Run the closed-loop converter. L from buildLoop(). opt: { event, size, back, nPer, N, pre },
 // optional x0 = [iL, vC] and vc0 to start from a given state (used by the period map).
 // Turn-off rule: VMC   vc ≤ VM·(t − tclk)/T            (trailing-edge PWM)
-//                PCMC  vc ≤ Ri·iL + Se·(t − tclk)       (peak current with slope compensation)
+//                PCMC  vc ≤ Ri·iL + Se·(t − tclk)       (peak current with slope compensation),
+//                      ignored for the blanking time cfg.tb·T after the clock (min on-time)
 function simulateCL(L, opt) {
   const p = L.p, T = 1 / p.fs, cfg = L.cfg, Vm = cfg.Vm, H = L.H;
   const pc = cfg.mode === 'pcmc', Ri = cfg.Ri, Se = L.Se || 0;
@@ -110,6 +111,7 @@ function simulateCL(L, opt) {
 
   for (let k = 0; k < pre + nPer; k++) {
     const seg = segAt(k), m = models[seg], tclk = k * T, tMax = tclk + cfg.Dmax * T;
+    const tB = tclk + (pc ? cfg.tb || 0 : 0) * T;                     // end of leading-edge blanking
     const recOn = k >= pre, i0 = rec.n;
     const ramp = pc ? (t, i) => Ri * i + Se * (t - tclk) : t => Vm * (t - tclk) / T;
     const u = (t, sst, a, b) => vrefAt(t) - H * m.vout(sst, a, b);
@@ -122,22 +124,24 @@ function simulateCL(L, opt) {
       let t = tclk + j * h, rem = h;
       while (rem > 1e-18 * T) {
         if (st === IDLE && m.offRises(vC)) { st = OFF; if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t, iL), vrefAt(t)); }
+        // while blanked, end the step at tB so the comparator starts exactly there
+        const blank = st === ON && t < tB - 1e-12 * T, hs = blank && t + rem > tB ? tB - t : rem;
         const u0 = u(t, st, iL, vC), vc0 = comp.y();
         comp.save(snap);
-        m.step(st, iL, vC, rem);
+        m.step(st, iL, vC, hs);
         let iL1 = m.ni, vC1 = m.nv;
-        comp.step(u0, u(t + rem, st, iL1, vC1), rem);
-        let h1 = rem, next = st;
+        comp.step(u0, u(t + hs, st, iL1, vC1), hs);
+        let h1 = hs, next = st;
         if (st === ON) {
-          const g0 = ramp(t, iL) - vc0, g1 = ramp(t + rem, iL1) - comp.y();
+          const g0 = ramp(t, iL) - vc0, g1 = ramp(t + hs, iL1) - comp.y();
           let tc = Infinity;
-          if (g1 >= 0) tc = t + rem * clamp(g0 < 0 ? g0 / (g0 - g1) : 0, 0, 1);
+          if (g1 >= 0 && !blank) tc = t + hs * clamp(g0 < 0 ? g0 / (g0 - g1) : 0, 0, 1);
           tc = Math.min(tc, tMax);
-          if (tc < t + rem) { h1 = tc - t; next = OFF; }
+          if (tc < t + hs) { h1 = tc - t; next = OFF; }
         } else if (st === OFF && !sync && iL1 < 0) {
-          h1 = rem * clamp(iL > 0 ? iL / (iL - iL1) : 0, 0, 1); next = IDLE;
+          h1 = hs * clamp(iL > 0 ? iL / (iL - iL1) : 0, 0, 1); next = IDLE;
         }
-        if (h1 < rem) {                                // redo the part before the event
+        if (h1 < hs) {                                 // redo the part before the event
           comp.load(snap);
           if (h1 > 0) {
             m.step(st, iL, vC, h1); iL1 = m.ni; vC1 = m.nv;
@@ -328,9 +332,15 @@ function pcmcOperatingPoint(p, cfg, Se, D0, N) {
   let z = [x[0], x[1], cfg.Ri * ipk + Se * D0 * T];
   const sc = [Is, Vs, Math.max(cfg.Ri * Is, 1e-6)];
   const res = zz => { const F = Fn([zz[0], zz[1]], zz[2]); return [F[0] - zz[0], F[1] - zz[1], F[2] - Vt, F[3]]; };
-  let r = res(z), ok = false;
+  // scaled residual; Newton keeps the best finite point, so a target with no steady state
+  // (unreachable Vo*, duty limit) still gives a finite linearization (flagged ok = false)
+  const nrm = rr => Math.max(Math.abs(rr[0]) / Is, Math.abs(rr[1]) / Vs, Math.abs(rr[2]) / Vt);
+  let r = res(z), ok = false, best = { z, r, e: nrm(r) };
   for (let it = 0; it < 25; it++) {
-    if (Math.abs(r[0]) < 1e-9 * Is && Math.abs(r[1]) < 1e-9 * Vs && Math.abs(r[2]) < 1e-9 * Vt) { ok = true; break; }
+    const e = nrm(r);
+    if (!isFinite(e)) break;
+    if (e < best.e || !isFinite(best.e)) best = { z, r, e };
+    if (e < 1e-9) { ok = true; break; }
     const J = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
     for (let j = 0; j < 3; j++) {
       const h = 1e-6 * sc[j], zp = z.slice(); zp[j] += h;
@@ -343,7 +353,10 @@ function pcmcOperatingPoint(p, cfg, Se, D0, N) {
     if (!p.sync && z[0] < 0) z[0] = 0;
     r = res(z);
   }
-  return { x: [z[0], z[1]], vc: z[2], D: r[3], ok: ok || (Math.abs(r[2]) < 1e-5 * Vt) };
+  if (!ok && nrm(r) < 1e-9) ok = true;
+  if (!ok && nrm(r) < best.e) best = { z, r, e: nrm(r) };
+  if (!ok) { z = best.z; r = best.r; }
+  return { x: [z[0], z[1]], vc: z[2], D: r[3], ok, err: best.e };
 }
 
 const PCMC_CACHE = new Map();
@@ -351,9 +364,12 @@ const PCMC_CACHE = new Map();
 // Sn, Sf = sensed on/off slopes, mc = 1 + Se/Sn, Qp = 1/(π(mc·D' − 0.5)),
 // current-loop sampled pole α = −(Sf − Se)/(Sn + Se) (|α| ≥ 1: subharmonic oscillation).
 function pcmcPlant(p, cfg, D0) {
-  const key = JSON.stringify([p, cfg.Vt, cfg.Ri, cfg.mSe, cfg.Dmax, D0]);
+  const key = JSON.stringify([p, cfg.Vt, cfg.Ri, cfg.mSe, cfg.Dmax, cfg.tb || 0, D0]);
   if (PCMC_CACHE.has(key)) return PCMC_CACHE.get(key);
-  const T = 1 / p.fs, af = ccmAffine(p), dc = averagedDC(af, D0), X = [Math.max(dc.X[0], 0), dc.X[1]];
+  // slopes at the target output (vC = Vo at DC); in DCM D0 is the DCM duty, where the CCM
+  // averaged point would give the wrong vC
+  const T = 1 / p.fs, af = ccmAffine(p), dc = averagedDC(af, D0), th0 = theory({ ...p, D: D0 });
+  const X = [!p.sync && th0.dcm ? th0.Ipk / 2 : Math.max(dc.X[0], 0), (dc.X[1] < 0 ? -1 : 1) * cfg.Vt];
   const slope = a => a.A[0][0] * X[0] + a.A[0][1] * X[1] + a.b[0];
   const Sn = cfg.Ri * slope(af.on), Sf = -cfg.Ri * slope(af.off), Se = cfg.mSe * Sf;
   const N = clamp(stepsPerPeriod(p, 0.3, 400, 4000), 400, 4000);
@@ -366,9 +382,13 @@ function pcmcPlant(p, cfg, D0) {
   const Dp = 1 - op.D, mc = 1 + Se / Sn;
   const lamC = lin.eig.slice().sort((a, b) => a.re - b.re)[0];        // current-loop pole
   const lamV = lin.eig.slice().sort((a, b) => b.re - a.re)[0];        // slow output pole
+  // DCM: iL starts from 0 at every clock, so an iL error dies in one period (pole at 0) and
+  // mc, Qp do not apply. The CCM RHP zero is not there either; the ESR zero is.
+  const dcm = op.ok && !p.sync && op.x[0] <= 1e-6 * Is;
   const out = {
-    kind: 'pcmc', D: op.D, Vo: lin.vo, IL: avg.IL, Gvd: lin.G, poly: null, zeros: avg.zeros,
-    Sn, Sf, Se, mc, Qp: 1 / (Math.PI * (mc * Dp - 0.5)), alpha: -(Sf - Se) / (Sn + Se),
+    kind: 'pcmc', D: op.D, Vo: lin.vo, IL: avg.IL, Gvd: lin.G, poly: null, dcm,
+    zeros: dcm ? avg.zeros.filter(z => z.re < 0) : avg.zeros,
+    Sn, Sf, Se, mc: dcm ? NaN : mc, Qp: dcm ? NaN : 1 / (Math.PI * (mc * Dp - 0.5)), alpha: dcm ? 0 : -(Sf - Se) / (Sn + Se),
     eig: lin.eig, lamC, fp: lamV.re > 0 && lamV.re < 1 ? -Math.log(lamV.re) / (TWO_PI * T) : NaN,
     vc0: op.vc, x0: op.x, ok: op.ok, Zout: null, lin,
   };

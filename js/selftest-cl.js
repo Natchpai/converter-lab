@@ -200,7 +200,7 @@ function runControlTests() {
     return buildLoop(p, pcCfg(designComp('T2', L0.plantK, fc, pm, L0.fmin).comp, Vt, mSe));
   };
   // current-loop pole of the period map vs the analytic α = −(Sf − Se)/(Sn + Se)
-  for (const [name, p, Vt] of [['buck', { ...base, topo: 'buck' }, 5], ['boost', { ...base, topo: 'boost', R: 50 }, 24]]) {
+  for (const [name, p, Vt] of [['buck', { ...base, topo: 'buck' }, 5], ['boost', { ...base, topo: 'boost', R: 50 }, 24], ['buck-boost', { ...base, topo: 'bb', R: 20 }, 12]]) {
     const pl = buildLoop(p, pcCfg({ type: 'P', K: 1 }, Vt, 0.5)).plant;
     check(pl.ok && rel(pl.lamC.re, pl.alpha) < 0.02 && Math.abs(pl.lamC.im) < 1e-9,
       `PCMC ${name} Se = Sf/2: current-loop pole ${pl.lamC.re.toFixed(4)} (period map) vs α ${pl.alpha.toFixed(4)}, D ${pl.D.toFixed(4)}, Qp ${pl.Qp.toFixed(2)}`);
@@ -237,6 +237,46 @@ function runControlTests() {
     const u = alt(0), s = alt(0.5);
     check(u.a > 0.05 && s.a < 0.005 && Cx.abs(u.L.plant.lamC) > 1 && !u.L.stable && u.L.warn.some(w => /Subharmonic/.test(w)) && s.L.stable,
       `PCMC subharmonic, buck D ${s.L.plant.D.toFixed(3)}: iL change between clock edges ${(u.a * 100).toFixed(1)} % of ΔiL at Se = 0 (α ${u.L.plant.alpha.toFixed(2)}), ${(s.a * 100).toFixed(4)} % at Se = Sf/2`);
+  }
+  // DCM: iL starts from 0 each period, so the current-loop pole is 0; slopes at the real Vo
+  {
+    const p = { ...base, topo: 'buck', R: 100 }, Vt = 7, pl = buildLoop(p, pcCfg({ type: 'P', K: 1 }, Vt, 0.5)).plant;
+    const sfx = 0.5 * Vt / p.L;                                    // ideal buck: Sf = Ri·Vo/L
+    const L = pcDesign(p, Vt, 0.5, 2e3, 60), mt = computeResCL(L, { event: 'load', size: 100, back: true, ...clSizes(L, 'auto') }).met;
+    const ok = pl.ok && pl.dcm && Cx.abs(pl.lamC) < 1e-6 && rel(pl.Sf, sfx) < 0.01 && mt.mode === 'DCM'
+      && rel(mt.segs[1].final, Vt) < 0.005 && rel(mt.segs[2].final, Vt) < 0.005 && mt.segs[1].settled && mt.segs[2].settled;
+    check(ok, `PCMC DCM buck: pole ${pl.lamC.re.toExponential(1)} (want 0), Sf ${fmtSI(pl.Sf, 'V/s')} vs Ri·Vo/L ${fmtSI(sfx, 'V/s')}, Type 2 load x2 -> ${mt.segs[1].final.toFixed(4)} V, back -> ${mt.segs[2].final.toFixed(4)} V (${mt.mode})`);
+    const Lb = buildLoop({ ...base, topo: 'boost', R: 500 }, pcCfg({ type: 'P', K: 1 }, 30, 0.5));
+    check(Lb.plant.dcm && !Lb.marks.some(m => m.rhp), `PCMC DCM boost: markers ${Lb.marks.map(m => m.text).join(', ')} (no CCM RHP zero)`);
+  }
+  // no steady state (target above the reachable output): finite plant, flagged and warned
+  {
+    const L = buildLoop({ ...base, ...lossy, topo: 'boost', R: 50 }, pcCfg({ type: 'T2', K: 1, fz1: 1e3, fp1: 5e4 }, 400, 0.5));
+    const fin = [10, 100, 1e3, 1e4, 4e4].every(f => { const g = L.plant.Gvd(f); return isFinite(g.re) && isFinite(g.im); });
+    check(!L.plant.ok && fin && isFinite(L.plant.vc0) && L.warn.some(w => /did not converge/.test(w)),
+      `PCMC lossy boost 400 V: ok=${L.plant.ok}, Gvc finite=${fin}, vc ${fmtSI(L.plant.vc0, 'V')}, D ${L.plant.D.toFixed(3)}, warned`);
+  }
+  // input step and soft-start with Type 2
+  {
+    const L = pcDesign(pB, 5, 0.5, 10e3, 60), sz = clSizes(L, 'auto');
+    const v = computeResCL(L, { event: 'vin', size: 25, back: true, ...sz }).met;
+    const st = computeResCL(L, { event: 'start', size: 0, back: false, nPer: 600, N: 200, pre: 0 }).met.segs[0];
+    const ok = v.segs.slice(1).every(g => rel(g.final, 5) < 0.005 && g.settled) && rel(st.final, 5) < 0.005 && st.over < 0.05 * 5;
+    check(ok, `PCMC buck Type 2: Vin +25 % -> ${v.segs[1].final.toFixed(4)} V (peak ${fmtSI(v.segs[1].over, 'V')}), back -> ${v.segs[2].final.toFixed(4)} V; soft-start -> ${st.final.toFixed(4)} V, overshoot ${fmtSI(st.over, 'V')}`);
+  }
+  // leading-edge blanking: no effect below D0, sets a minimum on-time above it
+  {
+    const comp = pcDesign(pB, 5, 0.5, 10e3, 60).cfg.comp;
+    const run = (Vt, tb) => {
+      const L = buildLoop(pB, { ...pcCfg(comp, Vt, 0.5), tb });
+      return { L, mt: computeResCL(L, { event: 'load', size: 50, back: true, nPer: 300, N: 200, pre: 60 }).met };
+    };
+    const a = run(5, 0), b = run(5, 0.05);
+    const same = rel(b.mt.segs[2].final, a.mt.segs[2].final) < 1e-6 && Math.abs(b.mt.Dfinal - a.mt.Dfinal) < 1e-6;
+    check(same, `PCMC blanking tb = 0.05 < D0: Vo ${b.mt.segs[2].final.toFixed(6)} V vs ${a.mt.segs[2].final.toFixed(6)} V at tb = 0, D ${b.mt.Dfinal.toFixed(6)} vs ${a.mt.Dfinal.toFixed(6)}`);
+    const c = run(1, 0.15), fin = c.mt.segs[c.mt.segs.length - 1].final;
+    check(c.mt.Dfinal >= 0.15 - 1e-9 && fin > 1.05 && c.L.warn.some(w => /blanking/.test(w)),
+      `PCMC blanking tb = 0.15, Vo* = 1 V (D0 ${c.L.D0.toFixed(3)}): duty ${c.mt.Dfinal.toFixed(4)} (min on-time), Vo ${fin.toFixed(3)} V above the target, warned`);
   }
   return { allPass, lines: out };
 }

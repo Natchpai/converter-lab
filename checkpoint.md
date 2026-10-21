@@ -9,6 +9,9 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 
 - `node tests/run.js` runs the pure self tests in Node (`--strip` removes timings).
 - `node tests/browser.js selftest` runs `index.html?selftest` in headless Edge/Chrome.
+- `node tests/browser.js uitest` runs `index.html?uitest`: clicks through the Control page
+  (every compensator type in VMC and PCMC, mode switches, topologies, presets) and checks for
+  errors, missing slider rows, NaN readouts and non-finite Bode curves.
 - `node tests/browser.js shot out.png 1400 1000` takes a screenshot.
 
 ## Phases
@@ -196,6 +199,37 @@ Web research could confirm only the Type 3 k-factor equations
 (https://arxiv.org/html/2310.14910, Eqs. 39-43). Other formulas are derived in code or
 checked by self tests (see the plan's "Formula sources" table). Readable PDFs of Erickson
 Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
+
+### Phase 6 review (fixes, tests, blanking)
+Read-only review of Phase 6, then fixes. Plan: `~/.claude/plans/breezy-frolicking-parrot.md`.
+- Bug since Phase 4: the compensator-type, mode and Textbook handlers ran `autoDesign()`
+  (which syncs the rows of the new type) before `buildCompRows()`. Switching to a type with
+  parameters the old rows lacked threw (any → Type 3 or I, P → PI/T2, I → any, PCMC → VMC).
+  Fixed by building the rows first. Found and confirmed by the new UI test (FAIL before,
+  PASS after).
+- PCMC with no steady state (target above the reachable Vo, duty limit): Newton hit a
+  singular Jacobian and gave NaN everywhere. `pcmcOperatingPoint` now keeps the best finite
+  iterate and uses a strict `ok` (all residuals < 1e-9 scale). At the duty limit Gvc is 0
+  (vc has no effect), so the page shows only Gc, "–" readouts, no slope rows, no fp marker,
+  and auto design is skipped with a note.
+- PCMC in DCM: `pl.dcm` (iL = 0 at the clock). Slopes are evaluated at vC = Vo* (was the CCM
+  averaged vC at the DCM duty: buck DCM Sf 24.2 kV/s, now 35.0 kV/s = Ri·Vo/L). α = 0,
+  mc and Qp "– (DCM)", no CCM RHP zero marker, DCM tip.
+- New: leading-edge blanking `tb` (fraction of T, row "Blanking time tb/T (min on-time)",
+  default 0). `simulateCL` ends a step at tB and ignores the comparator before it; if the
+  comparator is already high at tB the switch turns off there. Warning when D0 < tb.
+- New pure tests: buck-boost pole vs α; DCM buck (pole 0, Sf, Type 2 load step); DCM boost
+  markers; lossy boost 400 V (finite, flagged, warned); Vin step and soft-start; blanking
+  below D0 changes nothing (1e-6), above D0 sets duty = tb and Vo above target.
+- All old test lines unchanged except the Se = 0 subharmonic number (200.4 % → 193.8 %): the
+  slope point moved by 2e-15 V and that unstable orbit amplifies it. Node and Chrome now print
+  identical lines.
+- Checks (VERIFIED): `node tests/run.js` 62 PASS, `browser.js selftest` ALL PASS,
+  `browser.js uitest` ALL PASS (Chrome). Screenshots: PCMC DCM buck, PCMC unreachable 20 V,
+  VMC after switching back from PCMC (made with a scratch copy of the site plus a small
+  state script, not part of the repo).
+- Known limits: blanking has no separate pulse-skip threshold (vc is clamped at 0, so the
+  duty never drops below tb).
 
 ## Next step
 

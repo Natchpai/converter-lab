@@ -17,3 +17,4 @@ compute();
 resize();
 renderAll();
 if (/selftest/.test(location.search)) selfTest();
+else if (query.has('uitest')) uiTest();

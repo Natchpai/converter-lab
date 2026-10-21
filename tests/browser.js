@@ -1,5 +1,5 @@
 // Headless browser checks (Windows: Edge or Chrome).
-//   node tests/browser.js selftest              -> prints the #selftest text of index.html?selftest
+//   node tests/browser.js selftest | uitest     -> prints the #selftest text of index.html?selftest (or ?uitest)
 //   node tests/browser.js shot out.png [W H] [query]  -> screenshot, e.g. query "page=control&theme=dark"
 'use strict';
 const fs = require('fs');
@@ -32,11 +32,11 @@ const cleanup = () => {
 const [cmd, ...rest] = process.argv.slice(2);
 let code = 0;
 try {
-  if (cmd === 'selftest') {
+  if (cmd === 'selftest' || cmd === 'uitest') {
     // Edge 155 returns an empty --dump-dom, so try the next browser when that happens
     let dom = '';
     for (const exe of found) {
-      try { dom = run(['--dump-dom', page + '?selftest'], exe); } catch { dom = ''; }
+      try { dom = run(['--dump-dom', page + '?' + cmd], exe); } catch { dom = ''; }
       if (dom.length) { console.error('browser:', path.basename(exe)); break; }
     }
     const m = dom.match(/<div id="selftest">([\s\S]*?)<\/div>/);
@@ -48,7 +48,7 @@ try {
     run([`--screenshot=${path.resolve(out)}`, `--window-size=${W},${H}`, page + (q ? '?' + q : '')]);
     console.log('wrote', path.resolve(out));
   } else {
-    console.error('usage: node tests/browser.js selftest | shot out.png [W H] [query]');
+    console.error('usage: node tests/browser.js selftest | uitest | shot out.png [W H] [query]');
     code = 2;
   }
 } finally {
