@@ -21,7 +21,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 3 | Model hooks, complex helpers, averaged plant, Bode (plant) | done |
 | 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | done |
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | done |
-| 6 | Peak current-mode control | todo |
+| 6 | Peak current-mode control | in progress (math done, UI and tests not yet) |
 | 7 | Average current-mode control | todo |
 | 8 | FRA from the switching sim | todo |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | todo |
@@ -139,6 +139,36 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
   boost CCM); DCM slow pole from the period map = derived reduced-order wp within 0.02 %.
 - Performance: closed-loop run ~150-190 ms in Node for 200x300 / 1000x94 steps.
 
+### Phase 6 (in progress): peak current-mode control
+Done (all existing tests still pass; no PCMC tests yet):
+- `simulateCL`: `cfg.mode === 'pcmc'` turn-off rule Ri·iL + Se·(t − tclk) ≥ vc (S turns on at
+  every clock, may turn off at once = pulse skip); recorded `ramp` is the comparator input
+  Ri·iL + Se·t in PCMC. Options `x0`, `vc0`, `vcLim` start from a given state (period map).
+  Compensator clamp in PCMC: 0..`L.vcMax` (= `cfg.vcMax`).
+- `simcl.js`: `linearizePeriod` (generic), `periodMapVMC` refactored onto it,
+  `pcmcPeriodFn`, `solve3`, `pcmcOperatingPoint` (Newton on iL0, vC0, vc for |vo| = Vt),
+  `pcmcPlant` (cached; Gvc from the period map; Sn, Sf, Se = mSe·Sf, mc, Qp, analytic α,
+  period-map eigenvalues lamC / lamV, fp, vc0).
+- `loop.js` `buildLoop`: PCMC branch (plant = `pcmcPlant`, Fm = 1, `L.Se`, `L.vc0`,
+  `L.vcMax`, fmax = fs/2, no Zout curve, no pole polynomial: stability from margins and
+  |lamC| < 1), subharmonic / Qp / convergence warnings, `L.plantName`, `L.plantShort`.
+
+To do next (in this order):
+1. `CTL.cfg` in control-ui.js: add `Ri: 0.5, mSe: 0.5, vcMax: 4`. Make the side rows depend
+   on mode (VMC: Vt, Vm, Dmax; PCMC: Vt, Ri, mSe "Slope comp Se/Sf" 0..2, Dmax), rebuild on mode
+   change, enable the "Peak CMC" button in `#ctlMode` (add a click handler: set mode, set comp
+   type T2 for PCMC / T3 for VMC, `autoDesign('suggest')`, rebuild rows, `requestCompute()`).
+   Button "Se = Sf/2".
+2. `renderControl`: use `L.plantName` / `L.plantShort` for the plant curve, skip the Zout
+   curve when `L.Zcl` is null, show Sn, Sf, Se, mc, Qp, α (analytic) and lamC (period map),
+   vc0 in `#ctlOp` for PCMC; `polesText` must handle `L.poles === null`.
+3. Tests in selftest-cl.js: (a) ideal buck CCM: period-map lamC vs α = −(Sf−Se)/(Sn+Se) within
+   2 % for mSe = 0.5; (b) PCMC closed loop (T2 auto design) load step settles to Vo*;
+   (c) subharmonic: buck Vt = 8 V (D ≈ 0.67), mSe = 0 → iL at clock edges alternates
+   > 5 % of ΔiL in the last 20 periods; mSe = 0.5 → < 0.5 %. Use the same compensator for both.
+4. Screenshot the Control page in PCMC, then commit Phase 6 and update this file.
+Later phases (7 ACMC, 8 FRA, 9 drag + polish) as in the plan table.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -148,6 +178,4 @@ Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
 
 ## Next step
 
-Phase 6: peak current-mode control: comparator Ri·iL + Se·t ≥ vc in `simulateCL`, minimum
-on-time / pulse skip, Se control (Se = Sf/2 button), period-map plant with vc as input,
-readouts Sn, Sf, mc, Qp, subharmonic warning, mode seg enabled.
+Finish Phase 6 with the numbered list in "Phase 6 (in progress)" above.

@@ -68,9 +68,13 @@ const CL_EVENTS = {
   start: { name: 'Soft-start from zero', def: 0 },
 };
 
-// Run the closed-loop VMC converter. L from buildLoop(). opt: { event, size, back, nPer, N, pre }.
+// Run the closed-loop converter. L from buildLoop(). opt: { event, size, back, nPer, N, pre },
+// optional x0 = [iL, vC] and vc0 to start from a given state (used by the period map).
+// Turn-off rule: VMC   vc ≤ VM·(t − tclk)/T            (trailing-edge PWM)
+//                PCMC  vc ≤ Ri·iL + Se·(t − tclk)       (peak current with slope compensation)
 function simulateCL(L, opt) {
   const p = L.p, T = 1 / p.fs, cfg = L.cfg, Vm = cfg.Vm, H = L.H;
+  const pc = cfg.mode === 'pcmc', Ri = cfg.Ri, Se = L.Se || 0;
   const s = opt.size / 100, ev = opt.event;
   const nPer = opt.nPer, N = opt.N, h = T / N;
   const pre = ev === 'start' ? 0 : opt.pre;
@@ -87,16 +91,17 @@ function simulateCL(L, opt) {
   };
   const segAt = k => (ev === 'load' || ev === 'vin') && k >= pre + kEv && k < pre + kBack ? 1 : 0;
 
-  const comp = makeCompSim(L.cn, 0, 1.25 * Vm);
+  const comp = opt.vcLim ? makeCompSim(L.cn, -opt.vcLim, opt.vcLim) : makeCompSim(L.cn, 0, pc ? L.vcMax : 1.25 * Vm);
   const snap = new Float64Array(comp.S.length);
   let iL, vC;
-  if (ev === 'start') { iL = 0; vC = 0; comp.init(0); }
+  if (opt.x0) { [iL, vC] = opt.x0; comp.init(opt.vc0); }
+  else if (ev === 'start') { iL = 0; vC = 0; comp.init(0); }
   else {
     const m0 = makeModel({ ...p, D: L.D0 }), th = theory({ ...p, D: L.D0 });
     const Is = Math.max(Math.abs(th.IL) + th.dIL, 1e-3), Vs = Math.max(th.Vo, p.Vg, 1e-3);
     const sol = solveSteady(m0, [th.iL0, th.Vo], Math.max(N, 200), Is, Vs);
     [iL, vC] = sol.x;
-    comp.init(L.D0 * Vm);
+    comp.init(pc ? L.vc0 : L.D0 * Vm);
   }
   const rec = makeRecCL((nPer + 2) * (N + 6) + 64);
   const duty = new Float64Array(pre + nPer);
@@ -106,17 +111,17 @@ function simulateCL(L, opt) {
   for (let k = 0; k < pre + nPer; k++) {
     const seg = segAt(k), m = models[seg], tclk = k * T, tMax = tclk + cfg.Dmax * T;
     const recOn = k >= pre, i0 = rec.n;
-    const ramp = t => Vm * (t - tclk) / T;
+    const ramp = pc ? (t, i) => Ri * i + Se * (t - tclk) : t => Vm * (t - tclk) / T;
     const u = (t, sst, a, b) => vrefAt(t) - H * m.vout(sst, a, b);
-    // clock edge: S turns on unless vc is already below the ramp start
-    st = comp.y() > 0 ? ON : (st === ON ? OFF : st);
+    // clock edge: S turns on (VMC: unless vc is below the ramp start; PCMC: it may turn off at once)
+    st = pc || comp.y() > 0 ? ON : (st === ON ? OFF : st);
     if (st !== ON && !sync && iL <= 0) { iL = 0; st = m.offRises(vC) ? OFF : IDLE; }
     let dk = st === ON ? NaN : 0;
-    if (recOn) pushCL(rec, tclk - tPre, iL, vC, st, seg, comp.y(), 0, vrefAt(tclk));
+    if (recOn) pushCL(rec, tclk - tPre, iL, vC, st, seg, comp.y(), ramp(tclk, iL), vrefAt(tclk));
     for (let j = 0; j < N; j++) {
       let t = tclk + j * h, rem = h;
       while (rem > 1e-18 * T) {
-        if (st === IDLE && m.offRises(vC)) { st = OFF; if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t), vrefAt(t)); }
+        if (st === IDLE && m.offRises(vC)) { st = OFF; if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t, iL), vrefAt(t)); }
         const u0 = u(t, st, iL, vC), vc0 = comp.y();
         comp.save(snap);
         m.step(st, iL, vC, rem);
@@ -124,7 +129,7 @@ function simulateCL(L, opt) {
         comp.step(u0, u(t + rem, st, iL1, vC1), rem);
         let h1 = rem, next = st;
         if (st === ON) {
-          const g0 = ramp(t) - vc0, g1 = ramp(t + rem) - comp.y();
+          const g0 = ramp(t, iL) - vc0, g1 = ramp(t + rem, iL1) - comp.y();
           let tc = Infinity;
           if (g1 >= 0) tc = t + rem * clamp(g0 < 0 ? g0 / (g0 - g1) : 0, 0, 1);
           tc = Math.min(tc, tMax);
@@ -141,12 +146,12 @@ function simulateCL(L, opt) {
           if (next === IDLE) iL1 = 0;
         }
         iL = iL1; vC = vC1; t += h1; rem -= h1;
-        if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t), vrefAt(t));
+        if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t, iL), vrefAt(t));
         if (next !== st) {
           if (st === ON) dk = (t - tclk) / T;
           if (next === OFF && !sync && iL <= 0) { iL = 0; next = m.offRises(vC) ? OFF : IDLE; }
           st = next;
-          if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t), vrefAt(t));
+          if (recOn) pushCL(rec, t - tPre, iL, vC, st, seg, comp.y(), ramp(t, iL), vrefAt(t));
         }
       }
     }
@@ -248,10 +253,29 @@ function clSizes(L, nPerOpt) {
   return { nPer, N, pre };
 }
 
-/* ---------- period-map (sampled-data) model, VMC ---------- */
-// Linearize one switching period of the switched model: x_{k+1} = Φ·x_k + Γ·d_k and
-// vo_avg,k = C·x_k + Dd·d_k (vo averaged over period k). Then G(z) = C(zI − Φ)⁻¹Γ + Dd at
+/* ---------- period-map (sampled-data) models ---------- */
+// Linearize a one-period map Fn(x, u) -> [iL1, vC1, vo_avg] at (x, u):
+// x_{k+1} = Φ·x_k + Γ·u_k and vo_avg,k = C·x_k + Dd·u_k. Then G(z) = C(zI − Φ)⁻¹Γ + Dd at
 // z = e^{jωTs}. It holds in CCM and DCM and needs no averaging assumptions.
+function linearizePeriod(Fn, x, u, hI, hV, hu, T) {
+  const y0 = Fn(x, u), yI = Fn([x[0] + hI, x[1]], u), yV = Fn([x[0], x[1] + hV], u), yU = Fn(x, u + hu);
+  const Phi = [[(yI[0] - y0[0]) / hI, (yV[0] - y0[0]) / hV], [(yI[1] - y0[1]) / hI, (yV[1] - y0[1]) / hV]];
+  const Gam = [(yU[0] - y0[0]) / hu, (yU[1] - y0[1]) / hu];
+  const C = [(yI[2] - y0[2]) / hI, (yV[2] - y0[2]) / hV], Dd = (yU[2] - y0[2]) / hu;
+  const tr = Phi[0][0] + Phi[1][1], det = Phi[0][0] * Phi[1][1] - Phi[0][1] * Phi[1][0];
+  const eig = quadRoots(1, -tr, det);
+  const G = f => {
+    const z = Cx.exp({ re: 0, im: TWO_PI * f * T });
+    const a = Cx.sub(z, Cx.of(Phi[0][0])), b = Cx.sub(z, Cx.of(Phi[1][1]));
+    const dt = Cx.sub(Cx.mul(a, b), Cx.of(Phi[0][1] * Phi[1][0]));
+    const x0 = Cx.div(Cx.add(Cx.scale(b, Gam[0]), Cx.of(Phi[0][1] * Gam[1])), dt);
+    const x1 = Cx.div(Cx.add(Cx.of(Phi[1][0] * Gam[0]), Cx.scale(a, Gam[1])), dt);
+    return Cx.add(Cx.add(Cx.scale(x0, C[0]), Cx.scale(x1, C[1])), Cx.of(Dd));
+  };
+  return { Phi, Gam, C, Dd, x, u, eig, G, vo: y0[2] };
+}
+
+// VMC: input = duty, one period by simulate() (the ON time is exactly d·T).
 function periodMapVMC(p, D, N = 1000) {
   const T = 1 / p.fs;
   const F = (x, d) => {
@@ -264,20 +288,91 @@ function periodMapVMC(p, D, N = 1000) {
   const th = theory({ ...p, D, T });
   const Is = Math.max(Math.abs(th.IL) + th.dIL, 1e-3), Vs = Math.max(th.Vo, p.Vg, 1e-3);
   const x = solveSteady(makeModel({ ...p, D }), [th.iL0, th.Vo], N, Is, Vs).x;
-  const hI = 1e-6 * Is, hV = 1e-6 * Vs, hd = 1e-6;
-  const y0 = F(x, D), yI = F([x[0] + hI, x[1]], D), yV = F([x[0], x[1] + hV], D), yD = F(x, D + hd);
-  const Phi = [[(yI[0] - y0[0]) / hI, (yV[0] - y0[0]) / hV], [(yI[1] - y0[1]) / hI, (yV[1] - y0[1]) / hV]];
-  const Gam = [(yD[0] - y0[0]) / hd, (yD[1] - y0[1]) / hd];
-  const C = [(yI[2] - y0[2]) / hI, (yV[2] - y0[2]) / hV], Dd = (yD[2] - y0[2]) / hd;
-  const tr = Phi[0][0] + Phi[1][1], det = Phi[0][0] * Phi[1][1] - Phi[0][1] * Phi[1][0];
-  const eig = quadRoots(1, -tr, det);
-  const G = f => {
-    const z = Cx.exp({ re: 0, im: TWO_PI * f * T });
-    const a = Cx.sub(z, Cx.of(Phi[0][0])), b = Cx.sub(z, Cx.of(Phi[1][1]));
-    const dt = Cx.sub(Cx.mul(a, b), Cx.of(Phi[0][1] * Phi[1][0]));
-    const x0 = Cx.div(Cx.add(Cx.scale(b, Gam[0]), Cx.of(Phi[0][1] * Gam[1])), dt);
-    const x1 = Cx.div(Cx.add(Cx.of(Phi[1][0] * Gam[0]), Cx.scale(a, Gam[1])), dt);
-    return Cx.add(Cx.add(Cx.scale(x0, C[0]), Cx.scale(x1, C[1])), Cx.of(Dd));
+  return linearizePeriod(F, x, D, 1e-6 * Is, 1e-6 * Vs, 1e-6, T);
+}
+
+// PCMC: input = vc held over the period, one period by the closed-loop stepper with a frozen
+// compensator.
+function pcmcPeriodFn(p, cfg, Se, N) {
+  const T = 1 / p.fs;
+  const Lp = { p, cfg: { ...cfg, mode: 'pcmc' }, H: 0, cn: { G: 0, n: 1, wz: [], wp: [] }, Se };
+  return (x, vc) => {
+    const sim = simulateCL(Lp, { event: 'none', size: 0, back: false, nPer: 1, N, pre: 0, x0: x, vc0: vc, vcLim: 1e9 });
+    const r = sim.rec, m = sim.models[0], a = new Float64Array(r.n);
+    for (let i = 0; i < r.n; i++) a[i] = m.vout(r.st[i], r.iL[i], r.vC[i]);
+    return [r.iL[r.n - 1], r.vC[r.n - 1], periodAverages(r, a, T, 1)[0], sim.duty[0]];
   };
-  return { Phi, Gam, C, Dd, x, eig, G };
+}
+
+function solve3(A, b) {
+  const M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < 3; c++) {
+    let piv = c; for (let r = c + 1; r < 3; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    for (let r = c + 1; r < 3; r++) { const f = M[r][c] / M[c][c]; for (let k = c; k < 4; k++) M[r][k] -= f * M[c][k]; }
+  }
+  const x = [0, 0, 0];
+  for (let r = 2; r >= 0; r--) { let v = M[r][3]; for (let k = r + 1; k < 3; k++) v -= M[r][k] * x[k]; x[r] = v / M[r][r]; }
+  return x;
+}
+
+// Steady state of the PCMC converter with |vo| = Vt: Newton on (iL0, vC0, vc).
+function pcmcOperatingPoint(p, cfg, Se, D0, N) {
+  const T = 1 / p.fs, Fn = pcmcPeriodFn(p, cfg, Se, N), Vt = cfg.Vt;
+  const q = { ...p, D: D0 }, m = makeModel(q), th = theory(q);
+  const Is = Math.max(Math.abs(th.IL) + th.dIL, 1e-3), Vs = Math.max(th.Vo, p.Vg, 1e-3);
+  const x = solveSteady(m, [th.iL0, th.Vo], N, Is, Vs).x, rec = makeRec(N + 64);
+  simulate(m, x, 1, N, rec);
+  let ipk = -Infinity;
+  for (let i = 0; i < rec.n; i++) if (rec.st[i] === ON) ipk = Math.max(ipk, rec.iL[i]);
+  let z = [x[0], x[1], cfg.Ri * ipk + Se * D0 * T];
+  const sc = [Is, Vs, Math.max(cfg.Ri * Is, 1e-6)];
+  const res = zz => { const F = Fn([zz[0], zz[1]], zz[2]); return [F[0] - zz[0], F[1] - zz[1], F[2] - Vt, F[3]]; };
+  let r = res(z), ok = false;
+  for (let it = 0; it < 25; it++) {
+    if (Math.abs(r[0]) < 1e-9 * Is && Math.abs(r[1]) < 1e-9 * Vs && Math.abs(r[2]) < 1e-9 * Vt) { ok = true; break; }
+    const J = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let j = 0; j < 3; j++) {
+      const h = 1e-6 * sc[j], zp = z.slice(); zp[j] += h;
+      const rp = res(zp);
+      for (let i = 0; i < 3; i++) J[i][j] = (rp[i] - r[i]) / h;
+    }
+    const dz = solve3(J, r.slice(0, 3));
+    const lim = Math.max(1, ...dz.map((d, j) => Math.abs(d) / (0.3 * sc[j])));
+    z = z.map((v, j) => v - dz[j] / lim);
+    if (!p.sync && z[0] < 0) z[0] = 0;
+    r = res(z);
+  }
+  return { x: [z[0], z[1]], vc: z[2], D: r[3], ok: ok || (Math.abs(r[2]) < 1e-5 * Vt) };
+}
+
+const PCMC_CACHE = new Map();
+// Peak current-mode plant v̂o/v̂c from the period map, plus the classic slope numbers:
+// Sn, Sf = sensed on/off slopes, mc = 1 + Se/Sn, Qp = 1/(π(mc·D' − 0.5)),
+// current-loop sampled pole α = −(Sf − Se)/(Sn + Se) (|α| ≥ 1: subharmonic oscillation).
+function pcmcPlant(p, cfg, D0) {
+  const key = JSON.stringify([p, cfg.Vt, cfg.Ri, cfg.mSe, cfg.Dmax, D0]);
+  if (PCMC_CACHE.has(key)) return PCMC_CACHE.get(key);
+  const T = 1 / p.fs, af = ccmAffine(p), dc = averagedDC(af, D0), X = [Math.max(dc.X[0], 0), dc.X[1]];
+  const slope = a => a.A[0][0] * X[0] + a.A[0][1] * X[1] + a.b[0];
+  const Sn = cfg.Ri * slope(af.on), Sf = -cfg.Ri * slope(af.off), Se = cfg.mSe * Sf;
+  const N = clamp(stepsPerPeriod(p, 0.3, 400, 4000), 400, 4000);
+  const op = pcmcOperatingPoint(p, cfg, Se, D0, N);
+  const Fn = pcmcPeriodFn(p, cfg, Se, N);
+  const th = theory({ ...p, D: op.D });
+  const Is = Math.max(Math.abs(th.IL) + th.dIL, 1e-3), Vs = Math.max(cfg.Vt, p.Vg, 1e-3);
+  const lin = linearizePeriod(Fn, op.x, op.vc, 1e-6 * Is, 1e-6 * Vs, 1e-6 * Math.max(op.vc, 1e-3), T);
+  const avg = averagedPlant(p, D0, af);
+  const Dp = 1 - op.D, mc = 1 + Se / Sn;
+  const lamC = lin.eig.slice().sort((a, b) => a.re - b.re)[0];        // current-loop pole
+  const lamV = lin.eig.slice().sort((a, b) => b.re - a.re)[0];        // slow output pole
+  const out = {
+    kind: 'pcmc', D: op.D, Vo: lin.vo, IL: avg.IL, Gvd: lin.G, poly: null, zeros: avg.zeros,
+    Sn, Sf, Se, mc, Qp: 1 / (Math.PI * (mc * Dp - 0.5)), alpha: -(Sf - Se) / (Sn + Se),
+    eig: lin.eig, lamC, fp: lamV.re > 0 && lamV.re < 1 ? -Math.log(lamV.re) / (TWO_PI * T) : NaN,
+    vc0: op.vc, x0: op.x, ok: op.ok, Zout: null, lin,
+  };
+  if (PCMC_CACHE.size > 30) PCMC_CACHE.clear();
+  PCMC_CACHE.set(key, out);
+  return out;
 }
