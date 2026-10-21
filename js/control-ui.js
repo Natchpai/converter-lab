@@ -303,13 +303,25 @@ function buildControlUI() {
     const b = e.target.closest('button[data-view]'); if (!b) return;
     CTL.bodeView = b.dataset.view; renderControl();
   });
+  CTL.bode.addEventListener('pointerdown', e => {
+    const h = hitHandle(e); if (!h) return;
+    e.preventDefault();
+    try { CTL.bode.setPointerCapture(e.pointerId); } catch (_) { /* synthetic events in the UI test */ }
+    const { y } = canvasXY(e);
+    CTL.drag = { h, hc: CTL.hc, geo: CTL.geo, y0: y, v0: CTL.hc.cfg[h.key] };
+  });
   CTL.bode.addEventListener('pointermove', e => {
     if (!CTL.geo) return;
-    const r = CTL.bode.getBoundingClientRect(), x = (e.clientX - r.left) * dpr;
+    if (CTL.drag) { dragTo(e); return; }
+    const { x } = canvasXY(e), h = hitHandle(e);
+    CTL.bode.style.cursor = !h ? '' : h.kind === 'gain' ? 'ns-resize' : 'ew-resize';
     CTL.hoverF = x >= CTL.geo.ml && x <= CTL.geo.ml + CTL.geo.pw ? CTL.geo.fAt(x) : null;
     drawBode();
   });
-  CTL.bode.addEventListener('pointerleave', () => { CTL.hoverF = null; drawBode(); });
+  const endDrag = () => { if (!CTL.drag) return; const k = CTL.drag.h.key; CTL.drag = null; ctlChanged(k, true); };
+  CTL.bode.addEventListener('pointerup', endDrag);
+  CTL.bode.addEventListener('pointercancel', endDrag);
+  CTL.bode.addEventListener('pointerleave', () => { if (!CTL.drag) { CTL.hoverF = null; drawBode(); } });
   buildFraBar();
   updateCtlSegs();
 }
@@ -366,9 +378,10 @@ function renderControl() {
     { id: 'zcl', name: 'Closed-loop Zout (dBΩ)', short: 'Zout', color: '--s5', H: L.Zcl },
   ]).filter(d => d.H && (!noOp || d.id === 'gc'));
   // compensator whose zeros and poles get the drag handles
-  CTL.hc = inner ? { cn: L.cni, G: L.Gci } : { cn: L.cn, G: L.Gc };
+  CTL.hc = inner ? { cn: L.cni, G: L.Gci, cfg: CTL.cfg.ci, pre: 'ci', get: ciGet } : { cn: L.cn, G: L.Gc, cfg: CTL.cfg.comp, pre: 'cc', get: compGet };
   CTL.marks = [...L.marks, { f: p.fs / 2, text: 'fs/2' }];
   const mm = inner ? L.mi : m;
+  CTL.hc.fg = isFinite(mm.fc) ? mm.fc : Math.sqrt(L.fmin * L.fmax);   // gain handle on Gc at the crossover
   if (isFinite(mm.fc)) CTL.marks.push({ f: mm.fc, text: inner ? 'fci' : 'fc' });
   CTL.data = bodeSample(L.fmin, L.fmax, defs);
   const viewSeg = ac ? `<span class="seg small" role="group" aria-label="Bode view">${[['outer', 'Voltage loop'], ['inner', 'Current loop']].map(([v, n]) =>
@@ -474,12 +487,18 @@ function drawBode() {
   if (!CTL.data || !CTL.L) return;
   for (const c of CTL.data.curves) c.hidden = !CTL.show[c.id];
   const L = CTL.L, handles = [];
-  const hc = CTL.hc || { cn: L.cn, G: L.Gc };
-  if (CTL.show.gc) {
-    for (const w of hc.cn.wz) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'zero', color: '--s2' });
-    for (const w of hc.cn.wp) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'pole', color: '--s2' });
+  const hc = CTL.hc;
+  if (CTL.show.gc && hc) {
+    // zeros and poles in compNorm order are fz1, fz2 and fp1, fp2; the gain handle scales K (fi for I)
+    const add = (f, kind, key) => handles.push({ f, db: Cx.db(hc.G(f)), kind, key, color: '--s2' });
+    hc.cn.wz.forEach((w, i) => add(w / TWO_PI, 'zero', 'fz' + (i + 1)));
+    hc.cn.wp.forEach((w, i) => add(w / TWO_PI, 'pole', 'fp' + (i + 1)));
+    add(hc.fg, 'gain', hc.cfg.type === 'I' ? 'fi' : 'K');
   }
   CTL.geo = bodeDraw(CTL.bode, CTL.data, { markers: CTL.marks, shadeFrom: L.p.fs / 2, hoverF: CTL.hoverF, handles, dots: fraDots() });
+  const g = CTL.geo;
+  CTL.handles = handles.filter(h => h.f >= CTL.data.fmin && h.f <= CTL.data.fmax)
+    .map(h => ({ ...h, x: g.X(h.f), y: clamp(g.YM(h.db), g.yM0, g.yM0 + g.hM) }));
   renderBodeInfo();
 }
 
@@ -491,7 +510,7 @@ function renderBodeInfo() {
       return `${c.short}: ${v.mag.toFixed(1)} dB, ${v.ph.toFixed(1)}°`;
     }).join('   ') + fraHoverText(CTL.hoverF);
   } else {
-    CTL.bodeInfo.textContent = 'Move the pointer over the plot to read values.\n○ = compensator zero, × = compensator pole. ' + (CTL.L && CTL.L.fmax < CTL.L.p.fs
+    CTL.bodeInfo.textContent = 'Move the pointer over the plot to read values. Drag ○ zeros and × poles sideways, the ◆ gain up or down.\n' + (CTL.L && CTL.L.fmax < CTL.L.p.fs
       ? 'The sampled-data plant is plotted up to fs/2.' : 'Shaded: above fs/2 (averaged model not valid).');
   }
 }
@@ -562,6 +581,7 @@ function ctlTips(L) {
   if (p.topo !== 'buck' && pl.kind === 'ccm')
     t.push('Boost and buck-boost have a right-half-plane zero: gain goes up like a zero but phase goes down like a pole. It also moves with load and D. Keep f<sub>c</sub> below f<sub>RHP</sub>/5.');
   if (pl.kind === 'dcm') t.push('In DCM the plant has only one low-frequency pole, so PI or Type 2 is enough. The pole moves with R.');
+  if (pl.kind === 'dcm' && p.topo !== 'buck') t.push('In DCM the RHP zero of boost and buck-boost moves up near fs, so this reduced-order model leaves it out and the loop can be faster than in CCM. Check the margins again if the load can push the converter into CCM.');
   t.push('Change R, L, C or V<sub>in</sub> on the left: the compensator stays fixed and the margins move. A real design must be stable over the whole range.');
   t.push('The op-amp realizes Z<sub>f</sub>/Z<sub>in</sub> = H·G<sub>c</sub>. R<sub>bot</sub> sits at the virtual ground, so it sets the DC output only, not the AC loop gain.');
   return t;
@@ -662,4 +682,27 @@ function fraHoverText(fh) {
   const pt = f.pts.reduce((a, b) => Math.abs(Math.log(b.f / fh)) < Math.abs(Math.log(a.f / fh)) ? b : a);
   if (Math.abs(Math.log(pt.f / fh)) > 0.05) return '';
   return `\nFRA at ${fmtHz(pt.f)}: T ${Cx.db(pt.T).toFixed(1)} dB, ${Cx.deg(pt.T).toFixed(1)}°   plant ${Cx.db(pt.P).toFixed(1)} dB, ${Cx.deg(pt.P).toFixed(1)}°`;
+}
+
+/* ---------- drag zeros, poles and gain on the Bode plot ---------- */
+function canvasXY(e) {
+  const r = CTL.bode.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * dpr, y: (e.clientY - r.top) * dpr };
+}
+// Nearest handle within 12 CSS px.
+function hitHandle(e) {
+  if (!CTL.handles || !CTL.handles.length) return null;
+  const { x, y } = canvasXY(e);
+  let best = null, bd = 12 * dpr;
+  for (const h of CTL.handles) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+// Zero or pole: frequency under the pointer. Gain: K (or fi) times the dB moved since the
+// drag started, read on the axis of that moment (the plot rescales while K changes).
+function dragTo(e) {
+  const d = CTL.drag, { x, y } = canvasXY(e), def = CTL_COMP[d.h.key];
+  const v = d.h.kind === 'gain' ? d.v0 * 10 ** ((d.geo.dbAt(y) - d.geo.dbAt(d.y0)) / 20) : d.geo.fAt(x);
+  d.hc.cfg[d.h.key] = +clamp(v, def.min, def.max).toPrecision(4);
+  syncRows(d.hc.pre, compDefs(d.hc.cfg), d.hc.get);
+  ctlChanged(d.h.key, false);
 }

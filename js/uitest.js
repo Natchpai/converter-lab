@@ -51,6 +51,15 @@ function runUiTests() {
   for (const t of types) step(`ACMC voltage comp ${t}`, () => click(`#compType [data-t="${t}"]`));
   step('ACMC voltage comp T2', () => click('#compType [data-t="T2"]'));
   step('ACMC Bode current loop', () => click('#bodeLegend [data-view="inner"]'));
+  step('ACMC drag current-amp zero', () => {
+    renderAll();
+    const h = CTL.handles.find(x => x.kind === 'zero'), ci0 = CTL.cfg.ci.fz1, cv0 = CTL.cfg.comp.fz1;
+    const r = CTL.bode.getBoundingClientRect(), at = (x, y) => ({ clientX: r.left + x / dpr, clientY: r.top + y / dpr, pointerId: 1, bubbles: true });
+    CTL.bode.dispatchEvent(new PointerEvent('pointerdown', at(h.x, h.y)));
+    CTL.bode.dispatchEvent(new PointerEvent('pointermove', at(h.x - 30 * dpr, h.y)));
+    CTL.bode.dispatchEvent(new PointerEvent('pointerup', at(h.x - 30 * dpr, h.y)));
+    if (!(CTL.cfg.ci.fz1 < ci0) || CTL.cfg.comp.fz1 !== cv0) throw new Error(`Gci fz ${ci0} -> ${CTL.cfg.ci.fz1}, Gcv fz ${cv0} -> ${CTL.cfg.comp.fz1}`);
+  });
   for (const v of ['boost', 'bb', 'buck']) step(`ACMC topology ${v}`, () => click(`[data-group="topo"] [data-v="${v}"]`));
   step('ACMC DCM example', () => click('[data-preset="dcm"]'));
   step('ACMC Bode voltage loop', () => click('#bodeLegend [data-view="outer"]'));
@@ -58,6 +67,28 @@ function runUiTests() {
   step('mode PCMC from ACMC', () => click('#ctlMode [data-m="pcmc"]'));
   step('mode ACMC again', () => click('#ctlMode [data-m="acmc"]'));
   step('mode VMC', () => click('#ctlMode [data-m="vmc"]'));
+  // drag with synthetic pointer events: the first pole to the right, then the gain up 6 dB
+  const drag = (h, dx, dy) => {
+    const r = CTL.bode.getBoundingClientRect(), at = (x, y) => ({ clientX: r.left + x / dpr, clientY: r.top + y / dpr, pointerId: 1, bubbles: true });
+    CTL.bode.dispatchEvent(new PointerEvent('pointerdown', at(h.x, h.y)));
+    CTL.bode.dispatchEvent(new PointerEvent('pointermove', at(h.x + dx, h.y + dy)));
+    CTL.bode.dispatchEvent(new PointerEvent('pointerup', at(h.x + dx, h.y + dy)));
+  };
+  step('drag a pole on the Bode plot', () => {
+    renderAll();
+    const h = CTL.handles.find(x => x.kind === 'pole'), f0 = CTL.cfg.comp[h.key], g = CTL.geo;
+    drag(h, 40 * dpr, 0);
+    const want = g.fAt(h.x + 40 * dpr);
+    if (Math.abs(CTL.cfg.comp[h.key] / want - 1) > 1e-3 || CTL.cfg.comp[h.key] <= f0) throw new Error(`${h.key} ${f0} -> ${CTL.cfg.comp[h.key]}, want ${want}`);
+    if (Math.abs(parseSI($('#cc-nb-' + h.key).value) / CTL.cfg.comp[h.key] - 1) > 0.01) throw new Error('row not synced');
+  });
+  step('drag the gain on the Bode plot', () => {
+    renderAll();
+    const h = CTL.handles.find(x => x.kind === 'gain'), k0 = CTL.cfg.comp.K, g = CTL.geo;
+    const dy = g.YM(6) - g.YM(0);                              // 6 dB up (screen y points down)
+    drag(h, 0, dy);
+    if (Math.abs(20 * Math.log10(CTL.cfg.comp.K / k0) - 6) > 0.05) throw new Error(`K ${k0} -> ${CTL.cfg.comp.K}`);
+  });
   step('FRA 8 points (VMC)', () => {
     $('#fraN').value = '8'; click('#fraRun');
     while (CTL.fra.running) CTL.fra.step(1e9);

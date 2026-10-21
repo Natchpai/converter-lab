@@ -27,7 +27,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 6 | Peak current-mode control | done |
 | 7 | Average current-mode control | done |
 | 8 | FRA from the switching sim | done |
-| 9 | Drag poles/zeros, tips, DCM notes, polish | todo |
+| 9 | Drag poles/zeros, tips, DCM notes, polish | done |
 
 ## Log
 
@@ -303,8 +303,37 @@ Structure: iref = Gcv·(Vref − H·|vo|) (limited to 0..vcMax), vc = Gci·(iref
   seconds (2000-period points).
 - Screenshots checked: VMC buck dark and PCMC buck light with 15 FRA points.
 
-## Next step
+### Phase 9: drag on the Bode plot, tips, polish
+- Drag on the Bode plot (`control-ui.js`): ○ zeros and × poles move sideways (sets fz1/fz2,
+  fp1/fp2 in compNorm order), a new ◆ gain handle on the compensator curve at the crossover
+  moves up/down (scales K, or fi for Type 1). The gain drag reads dB on the axis from the
+  drag start, because the plot rescales while K changes. Rows sync while dragging, the Bode
+  redraws live, the simulation reruns 250 ms after the last move and at once on release.
+  Cursor shows ew-/ns-resize over a handle. In ACMC the handles edit the compensator of the
+  shown view (Gcv or Gci). Canvas already has `touch-action: none`.
+- Tips: VMC DCM boost/buck-boost (RHP zero moves near fs); Bode hint names the handles.
+- UI test (60 steps, ALL PASS): drag a pole (lands on the frequency under the pointer,
+  row synced), drag the gain +6 dB (K × 2.0), drag a Gci zero in the ACMC current-loop view
+  (Gcv unchanged).
+- Checks: Node 75 PASS = Chrome (unchanged vs Phase 8). Screenshots: desktop dark VMC
+  (handles), 520 px light ACMC with an FRA run.
+- NOT_VERIFIED: 390 px (headless Chrome renders about 500 px minimum; layout uses the same
+  stacking rules at 520 px), real mouse and touch dragging in a browser (only synthetic
+  pointer events in the UI test).
 
-Phase 9: drag zeros/poles/gain on the Bode plot, tips text, DCM notes, polish; checks at
-desktop and phone width.
-`node tests/browser.js selftest` uses Chrome while Edge's `--dump-dom` is broken.
+## Status
+All phases of the plan are done on `feat/control-lab`. Not pushed or merged (needs a
+separate request).
+
+Open items, none blocking:
+- ACMC closed-loop Zout curve and current-amplifier op-amp values.
+- The FRA gain offset in closed loop (vc ripple at the comparator) is explained only
+  qualitatively.
+- Dixon's slope rule and several formulas are checked by simulation, not confirmed from a
+  readable source (see "Formula notes").
+- No pulse skipping below the blanking time in PCMC.
+- Edge 155 `--dump-dom` is empty; `tests/browser.js` falls back to Chrome.
+
+## Next step
+None from the plan. Possible follow-ups: the open items above, or merging to `main`
+(separate approval).
