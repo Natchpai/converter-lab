@@ -6,6 +6,8 @@
 // Gvc = v̂o/v̂c from the period map.
 // Average current mode: iref = Gcv·(Vref − H·|vo|), vc = Gci·(iref − Ri·iL), d = vc/Vm.
 // Inner loop Ti = Gci·Ri·Gid/Vm; the voltage loop sees Gvi = (Gci·Gvd/Vm)/(1 + Ti), T = Gcv·H·Gvi.
+// Output impedance with a load current io (v̂o = Gvd·d̂ − Zout·îo, îL = Gid·d̂ + Zi·îo):
+// current loop closed Zoi = Zout + Ri·Gvi·Zi, both loops closed Zcl = Zoi/(1 + T).
 // Pure: used by the UI, the closed-loop sim and the tests.
 const VREF = 2.5;
 
@@ -48,7 +50,9 @@ function buildLoop(p, cfg) {
   L.T = f => Cx.mul(L.Gc(f), L.plantK(f));
   L.CL = f => { const t = L.T(f); return Cx.scale(Cx.div(t, Cx.add(t, Cx.of(1))), 1 / L.H); };
   L.Zol = pl.Zout;
-  L.Zcl = pl.Zout && !ac ? f => Cx.div(pl.Zout(f), Cx.add(Cx.of(1), L.T(f))) : null;
+  if (ac) L.Zoi = pl.Zout && pl.Zi ? f => Cx.add(pl.Zout(f), Cx.scale(Cx.mul(L.Gvi(f), pl.Zi(f)), cfg.Ri)) : null;
+  const Zo = ac ? L.Zoi : pl.Zout;
+  L.Zcl = Zo ? f => Cx.div(Zo(f), Cx.add(Cx.of(1), L.T(f))) : null;
 
   L.marks = plantMarks(L.p, pl);
   const fLow = Math.min(p.fs / 1e4, ...L.marks.map(m => m.f / 3));
@@ -92,13 +96,14 @@ function buildLoop(p, cfg) {
   }
 
   L.opamp = opampValues(cfg.comp, L.H, cfg.R1);
+  if (ac) L.opampI = opampValues(cfg.ci, 1, cfg.R1);     // current amplifier: Zf/Zin = Gci
   L.Rbot = cfg.R1 * cfg.Vref / Math.max(cfg.Vt - cfg.Vref, 1e-9);
 
   // warnings for the reader
   const fc = L.m.fc, rhp = L.marks.find(m => m.rhp);
   if (!L.reach) L.warn.push(`Target ${fmtSI(cfg.Vt, 'V')} is not reachable (max about ${fmtSI(L.Vmax, 'V')} with these parts).`);
   if (L.D0 > cfg.Dmax) L.warn.push(`The needed duty ${L.D0.toFixed(3)} is above Dmax = ${cfg.Dmax}.`);
-  if (pc && L.D0 < (cfg.tb || 0)) L.warn.push(`The needed duty ${L.D0.toFixed(3)} is below the blanking time t<sub>b</sub>/T = ${cfg.tb}: the minimum on-time sets the duty and V<sub>o</sub> goes above the target.`);
+  if (pc && L.D0 < (cfg.tb || 0)) L.warn.push(`The needed duty ${L.D0.toFixed(3)} is below the blanking time t<sub>b</sub>/T = ${cfg.tb}: the controller skips pulses (bursts of min on-time pulses). V<sub>o</sub> stays near the target with more ripple, and the small-signal model does not hold there.`);
   if (pc && Cx.abs(pl.lamC) >= 1) L.warn.push(`Subharmonic oscillation: the current-loop pole α = ${pl.lamC.re.toFixed(2)} is outside the unit circle (|α| ≥ 1). Raise Se: it must be above (Sf − Sn)/2; Se = Sf/2 works for any D.`);
   else if (pc && pl.Qp > 2) L.warn.push(`Qp = ${pl.Qp.toFixed(1)}: the double pole at fs/2 is sharp, close to subharmonic oscillation. Add slope compensation.`);
   if (pc && !pl.ok) L.warn.push('The peak-current operating point did not converge (duty limit or no steady state).');
@@ -121,6 +126,7 @@ function buildLoop(p, cfg) {
   if (rhp && fc > rhp.f / 5) L.warn.push(`fc is above fRHP/5 = ${fmtSI(rhp.f / 5, 'Hz')}. The RHP zero adds phase lag; keep fc lower.`);
   if (pl.kind === 'dcm') L.warn.push('DCM: the plant is the reduced-order model with ideal parts (one pole).');
   if (!L.opamp.ok) L.warn.push('Op-amp values: ' + L.opamp.note);
+  if (ac && !L.opampI.ok) L.warn.push('Current-amplifier op-amp values: ' + L.opampI.note);
   return L;
 }
 

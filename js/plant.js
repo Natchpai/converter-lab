@@ -84,6 +84,7 @@ function averagedPlant(p, D, af = ccmAffine(p)) {
     Gid: ssTF(A, Bd, ci, 0),
     Gvg: ssTF(A, Bg, dc.c, 0),
     Zout: f => Cx.scale(zx(f), -1),   // vo per amp drawn from the output
+    Zi: ssTF(A, Bx, ci, 0),            // iL per amp drawn from the output (ACMC Zout)
     zeros: ssZeros(A, Bd, dc.c, Ed),
     poly: ssPoly(A, Bd, dc.c, Ed),          // Gvd = num/den
     polyI: ssPoly(A, Bd, ci, 0),            // Gid = num/den (same den)

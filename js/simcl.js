@@ -73,7 +73,8 @@ const CL_EVENTS = {
 // noRec (no waveform recording), inj (frequency response, see fra.js).
 // Turn-off rule: VMC   vc ≤ VM·(t − tclk)/T            (trailing-edge PWM)
 //                PCMC  vc ≤ Ri·iL + Se·(t − tclk)       (peak current with slope compensation),
-//                      ignored for the blanking time cfg.tb·T after the clock (min on-time)
+//                      ignored for the blanking time cfg.tb·T after the clock (min on-time);
+//                      a pulse is skipped when the min on-time alone would pass vc
 //                ACMC  as VMC, with vc = Gci·(iref − Ri·iL) and iref = Gcv·(vref − H·|vo|)
 function simulateCL(L, opt) {
   const g = simulateCLSteps(L, opt);
@@ -156,8 +157,11 @@ function* simulateCLSteps(L, opt) {
     const ramp = pc ? (t, i) => Ri * i + Se * (t - tclk) : t => Vm * (t - tclk) / T;
     u = (t, sst, a, b) => vrefAt(t) - H * m.vout(sst, a, b);
     const push = tt => pushCL(rec, tt - tPre, iL, vC, st, seg, vcNow(tt), ramp(tt, iL), vrefAt(tt), ac ? comp.y() : 0);
-    // clock edge: S turns on (VMC: unless vc is below the ramp start; PCMC: it may turn off at once)
-    st = pc || vcNow(tclk) > 0 ? ON : (st === ON ? OFF : st);
+    // clock edge: S turns on (VMC: unless vc is below the ramp start; PCMC: it may turn off at once).
+    // PCMC with blanking skips the pulse when Ri·iL + Se·t at the end of blanking (iL ramped
+    // with the ON slope) is already above vc: the min on-time would give more current than asked.
+    const tbT = tB - tclk, skip = pc && tbT > 0 && Ri * (iL + m.der(ON, iL, vC)[0] * tbT) + Se * tbT > vcNow(tclk);
+    st = (pc ? !skip : vcNow(tclk) > 0) ? ON : (st === ON ? OFF : st);
     if (st !== ON && !sync && iL <= 0) { iL = 0; st = m.offRises(vC) ? OFF : IDLE; }
     let dk = st === ON ? NaN : 0;
     if (recOn) push(tclk);

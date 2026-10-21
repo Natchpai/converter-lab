@@ -264,19 +264,21 @@ function runControlTests() {
     const ok = v.segs.slice(1).every(g => rel(g.final, 5) < 0.005 && g.settled) && rel(st.final, 5) < 0.005 && st.over < 0.05 * 5;
     check(ok, `PCMC buck Type 2: Vin +25 % -> ${v.segs[1].final.toFixed(4)} V (peak ${fmtSI(v.segs[1].over, 'V')}), back -> ${v.segs[2].final.toFixed(4)} V; soft-start -> ${st.final.toFixed(4)} V, overshoot ${fmtSI(st.over, 'V')}`);
   }
-  // leading-edge blanking: no effect below D0, sets a minimum on-time above it
+  // leading-edge blanking: no effect below D0; above it pulses of the min on-time are skipped
   {
     const comp = pcDesign(pB, 5, 0.5, 10e3, 60).cfg.comp;
     const run = (Vt, tb) => {
       const L = buildLoop(pB, { ...pcCfg(comp, Vt, 0.5), tb });
-      return { L, mt: computeResCL(L, { event: 'load', size: 50, back: true, nPer: 300, N: 200, pre: 60 }).met };
+      const res = computeResCL(L, { event: 'load', size: 50, back: true, nPer: 300, N: 200, pre: 60 });
+      return { L, mt: res.met, duty: res.sim.duty };
     };
     const a = run(5, 0), b = run(5, 0.05);
     const same = rel(b.mt.segs[2].final, a.mt.segs[2].final) < 1e-6 && Math.abs(b.mt.Dfinal - a.mt.Dfinal) < 1e-6;
     check(same, `PCMC blanking tb = 0.05 < D0: Vo ${b.mt.segs[2].final.toFixed(6)} V vs ${a.mt.segs[2].final.toFixed(6)} V at tb = 0, D ${b.mt.Dfinal.toFixed(6)} vs ${a.mt.Dfinal.toFixed(6)}`);
-    const c = run(1, 0.15), fin = c.mt.segs[c.mt.segs.length - 1].final;
-    check(c.mt.Dfinal >= 0.15 - 1e-9 && fin > 1.05 && c.L.warn.some(w => /blanking/.test(w)),
-      `PCMC blanking tb = 0.15, Vo* = 1 V (D0 ${c.L.D0.toFixed(3)}): duty ${c.mt.Dfinal.toFixed(4)} (min on-time), Vo ${fin.toFixed(3)} V above the target, warned`);
+    const c = run(1, 0.15), fin = c.mt.segs[c.mt.segs.length - 1].final, ds = Array.from(c.duty.slice(-100));
+    const nSkip = ds.filter(d => d === 0).length, dOn = Math.min(...ds.filter(d => d > 0));
+    check(nSkip > 0 && dOn >= 0.15 - 1e-9 && rel(fin, 1) < 0.02 && c.L.warn.some(w => /skips pulses/.test(w)),
+      `PCMC blanking tb = 0.15, Vo* = 1 V (D0 ${c.L.D0.toFixed(3)}): ${nSkip} of the last 100 pulses skipped, shortest pulse ${dOn.toFixed(4)} (min on-time), Vo ${fin.toFixed(4)} V`);
   }
 
   // ---- average current mode
@@ -315,6 +317,38 @@ function runControlTests() {
     const sA = mt.segs[1], sB = mt.segs[2];
     const ok = rel(sA.final, Vt) < 0.005 && rel(sB.final, Vt) < 0.005 && sA.settled && sB.settled && rel(iS, iR) < 0.005 && rel(mt.Dfinal, L.D0) < 0.01;
     check(ok, `ACMC closed loop ${name} (${L.plant.kind}): load x2 -> ${sA.final.toFixed(4)} V (dip ${fmtSI(sA.under, 'V')}), back -> ${sB.final.toFixed(4)} V, Ri·iL ${fmtSI(iS, 'V', 4)} vs iref ${fmtSI(iR, 'V', 4)}, ${sz.nPer}x${sz.N} steps ${ms.toFixed(0)} ms`);
+  }
+  // closed-loop Zout vs the switching sim: a 5 % load step (R -> R/1.05, Δio = Vt·0.05/R).
+  // Model: Δvo(t) = −Δio·z(t), z = step response of Zcl = (2/π)∫ Re Zcl(jω)·sin(ωt)/ω dω up to fs/2,
+  // averaged over each period like the per-period average of the simulated vo.
+  const zclStep = (L, name) => {
+    const p = L.p, T = 1 / p.fs, n = 20000, dw = TWO_PI * p.fs / 2 / n, reZ = new Float64Array(n + 1);
+    for (let i = 0; i <= n; i++) reZ[i] = L.Zcl(Math.max(i, 1e-6) * dw / TWO_PI).re;
+    const z = t => { let a = 0.5 * reZ[0] * t; for (let i = 1; i <= n; i++) a += (i === n ? 0.5 : 1) * reZ[i] * Math.sin(i * dw * t) / (i * dw); return a * dw * 2 / Math.PI; };
+    const nPer = 200, sim = computeResCL(L, { event: 'load', size: 5, back: false, nPer, N: 200, pre: 60 }), avg = sim.met.avg, kEv = sim.sim.kEv;
+    let base = 0; for (let k = kEv - 10; k < kEv; k++) base += avg[k] / 10;
+    const dIo = L.cfg.Vt * 0.05 / p.R;
+    let dipS = 0, dipM = 0, err = 0;
+    for (let k = kEv; k < nPer; k++) {
+      const ds = avg[k] - base, t0 = (k - kEv) * T;
+      const dm = -dIo * (z(t0 + 0.125 * T) + z(t0 + 0.375 * T) + z(t0 + 0.625 * T) + z(t0 + 0.875 * T)) / 4;
+      dipS = Math.min(dipS, ds); dipM = Math.min(dipM, dm); err = Math.max(err, Math.abs(ds - dm));
+    }
+    const eDip = rel(dipS, dipM), eW = err / Math.abs(dipM);
+    check(eDip < 0.1 && eW < 0.15, `${name} closed-loop Zout: 5 % load step dip ${fmtSI(-dipS, 'V')} (switching sim) vs ${fmtSI(-dipM, 'V')} from Zcl (${pc(eDip)}), worst gap ${pc(eW)} of the dip`);
+  };
+  {
+    const Lv0 = buildLoop(pB, cfgOf({ type: 'P', K: 1 }, 5));
+    // fc well below fs/10: at fc = fs/10 the averaged model gives a dip about 16-22 % smaller than the switching sim
+    zclStep(buildLoop(pB, cfgOf(designComp('T3', Lv0.plantK, 3e3, 60, Lv0.fmin).comp, 5)), 'VMC buck Type 3 fc 3 kHz');
+    const LA = acDesign(pB, 5, 16e3, 4e3);
+    zclStep(LA, 'ACMC buck fc 4 kHz');
+    // ideal buck: with the current loop closed (integrator in Gci) the converter is a current source into R, so Zoi(0) = R
+    const Li = acDesign({ ...base, topo: 'buck' }, 5, 16e3, 2e3), z0 = Cx.abs(Li.Zoi(fLow));
+    // current amplifier op-amp: Zf/Zin = Gci
+    let wo = 0;
+    for (const f of [100, 1e3, 1e4, 5e4]) wo = Math.max(wo, rel(Cx.abs(opampEval(LA.opampI, f)), Cx.abs(LA.Gci(f))));
+    check(rel(z0, 10) < 1e-3 && wo < 1e-6, `ACMC ideal buck Zoi(0) ${fmtSI(z0, 'Ω', 5)} vs R = 10 Ω; current-amp op-amp Zf/Zin vs Gci worst ${pc(wo)}`);
   }
   // slope rule: buck at D = 0.67, current-amp gain at fs set for slope ratio 0.8 and 2.0
   {

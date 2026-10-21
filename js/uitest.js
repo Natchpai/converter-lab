@@ -56,6 +56,11 @@ function runUiTests() {
   step('ACMC current amp T2', () => click('#ciType [data-t="T2"]'));
   for (const t of types) step(`ACMC voltage comp ${t}`, () => click(`#compType [data-t="${t}"]`));
   step('ACMC voltage comp T2', () => click('#compType [data-t="T2"]'));
+  step('ACMC current-amp circuit and Zout', () => {
+    renderAll();
+    if ($('#opampIBlock').hidden || /NaN/.test($('#opampTblI').textContent) || !/R2/.test($('#opampTblI').textContent)) throw new Error('no current-amp values');
+    if (!CTL.data.curves.some(c => c.short === 'Zout')) throw new Error('no closed-loop Zout curve');
+  });
   step('ACMC Bode current loop', () => click('#bodeLegend [data-view="inner"]'));
   step('ACMC drag current-amp zero', () => {
     renderAll();
@@ -72,7 +77,7 @@ function runUiTests() {
   step('ACMC reset', () => click('[data-preset="reset"]'));
   step('mode PCMC from ACMC', () => click('#ctlMode [data-m="pcmc"]'));
   step('mode ACMC again', () => click('#ctlMode [data-m="acmc"]'));
-  step('mode VMC', () => click('#ctlMode [data-m="vmc"]'));
+  step('mode VMC', () => { click('#ctlMode [data-m="vmc"]'); renderAll(); if (!$('#opampIBlock').hidden) throw new Error('current-amp circuit shown in VMC'); });
   // drag with synthetic pointer events: the first pole to the right, then the gain up 6 dB
   const drag = (h, dx, dy) => {
     const r = CTL.bode.getBoundingClientRect(), at = (x, y) => ({ clientX: r.left + x / dpr, clientY: r.top + y / dpr, pointerId: 1, bubbles: true });

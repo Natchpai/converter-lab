@@ -29,6 +29,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 8 | FRA from the switching sim | done |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | done |
 | 10 | Merge Design and Losses pages from `buck-boost-buckBoost-index.html` | done |
+| 11 | Open items: ACMC Zout and current-amp circuit, PCMC pulse skipping, header | done |
 
 ## Log
 
@@ -224,6 +225,35 @@ split by section and diffed against the main files; only the extra functions wer
   download in a real browser (only the CSV text is tested), screenshots of the Converter page
   with dead time and ringing (covered by the UI test, not looked at), the efficiency hover.
 
+### Phase 11: open items
+- ACMC closed-loop Zout. With a load current io: v̂o = Gvd·d̂ − Zout·îo, îL = Gid·d̂ + Zi·îo
+  (new `Zi` = iL per amp drawn, in `averagedPlant`). Current loop closed:
+  Zoi = Zout + Ri·Gvi·Zi; both loops: Zcl = Zoi/(1 + T). Shown as the Zout curve in ACMC (CCM;
+  DCM has no Zout, as before).
+- Current-amplifier circuit (ACMC): `opampValues(ci, 1, R1)`, Zf/Zin = Gci, input Ri·iL,
+  iref on the + input. Note on the page: that circuit gives vc = Gci·(iref − Ri·iL) + iref;
+  the current loop is exact, the sim uses the ideal Gci·(iref − Ri·iL). The voltage amplifier
+  output in ACMC is now labelled iref.
+- PCMC pulse skipping (`simcl.js`): with blanking, a pulse is skipped when
+  Ri·(iL + slope_on·tb·T) + Se·tb·T > vc at the clock. Off for tb = 0, so only the blanking
+  test line changed: tb = 0.15, Vo* = 1 V (D0 0.12) now holds 1.0009 V with 66 of 100 pulses
+  skipped (before: 1.347 V). The warning and tip text say so.
+- Header: the subtitle hides between 821 and 1560 px, so the four page buttons fit on one
+  line at 1400 px. CSV/PNG moved to the Time/div row (the first row wrapped on Control).
+- New tests: closed-loop Zout vs a 5 % load step in the switching sim, from the step response
+  of Zcl (sine integral of Re Zcl up to fs/2): VMC buck Type 3 fc 3 kHz dip 0.4 %, ACMC buck
+  fc 4 kHz dip 2.6 %. ACMC ideal buck Zoi(0) = R (10.000 Ω). Current-amp op-amp Zf/Zin = Gci.
+  UI test 72 steps ALL PASS (new: ACMC current-amp table and Zout curve, block hidden in VMC).
+- Finding: the VMC Zout curve is less accurate near fs/10. Load-step dip, model vs sim:
+  fc 2 kHz 0.2 %, 5 kHz 4.6 %, 10 kHz about 16 % (model smaller). Scaling T by −0.6 dB moves
+  the model only about 2 %, so it is the averaged-model limit near fs/10, not the FRA gain
+  offset. ASSUMED cause; not separated further.
+- Checks: Node ALL PASS (old lines identical except the blanking line), browser selftest and
+  uitest ALL PASS. Screenshots: Control ACMC light 1400 px (header, toolbar, both op-amp
+  circuits), dark 1400 px.
+- NOT_VERIFIED: the current-amp circuit with a + input reference as a real build (only the
+  Zf/Zin ratio is tested), pulse skipping with sync rectifier.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -353,16 +383,15 @@ Structure: iref = Gcv·(Vref − H·|vo|) (limited to 0..vcMax), vc = Gci·(iref
   pointer events in the UI test).
 
 ## Status
-All phases of the plan are done and merged to `main`. Phase 10 (merge of the single-file
-Design and Losses pages) is on `feat/design-losses`, not merged or pushed.
+All phases of the plan are done and merged to `main`. Phases 10 (merge of the single-file
+Design and Losses pages) and 11 (open items) are on `feat/design-losses`, not merged or pushed.
 
 Open items, none blocking:
-- ACMC closed-loop Zout curve and current-amplifier op-amp values.
 - The FRA gain offset in closed loop (vc ripple at the comparator) is explained only
   qualitatively.
 - Dixon's slope rule and several formulas are checked by simulation, not confirmed from a
   readable source (see "Formula notes").
-- No pulse skipping below the blanking time in PCMC.
+- VMC Zout curve: about 16 % low on the load-step dip at fc = fs/10 (Phase 11 finding).
 - Edge 155 `--dump-dom` is empty; `tests/browser.js` falls back to Chrome.
 
 ## Next step

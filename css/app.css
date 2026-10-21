@@ -43,6 +43,8 @@ header.top {
 @media (min-width: 821px) { header.top { position: sticky; top: 0; z-index: 10; } }
 .brand { margin-right: auto; }
 .brand span { color: var(--muted); font-size: 14px; }
+/* four page buttons: drop the subtitle so the header stays on one line */
+@media (min-width: 821px) and (max-width: 1560px) { .brand span { display: none; } }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--soft); }
 .seg button {
   border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 15px;

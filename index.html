@@ -130,13 +130,14 @@
       </div>
       <label class="convOnly"><input type="checkbox" id="theoryChk" checked> Theory overlay</label>
       <label><input type="checkbox" id="shadeChk" checked> Shade intervals</label>
-      <button class="btn" id="csvBtn" title="Download the enabled channels as CSV">CSV</button>
-      <button class="btn" id="pngBtn" title="Download the scope screen as PNG">PNG</button>
     </div>
     <div class="scopeHead">
       <label>Time/div <select id="tdivSel"></select></label>
       <label style="flex:1 1 160px">Position <input type="range" id="hposRange" min="0" max="1" step="0.005" value="0.1"></label>
       <label id="winWrap" class="convOnly">Startup window <select id="winSel"></select></label>
+      <span class="grow"></span>
+      <button class="btn" id="csvBtn" title="Download the enabled channels as CSV">CSV</button>
+      <button class="btn" id="pngBtn" title="Download the scope screen as PNG">PNG</button>
     </div>
     <div class="screen" id="screen"><canvas id="scope" aria-label="Oscilloscope screen"></canvas></div>
     <div class="curInfo" id="curInfo"></div>

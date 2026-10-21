@@ -250,6 +250,14 @@ function buildControlUI() {
     ${rowsHTML('co', CTL_OPAMP)}
     <div id="opampSvg"></div>
     <div class="tblWrap"><table class="data" id="opampTbl"></table></div>
+    <div id="opampIBlock" hidden>
+      <h3>Current amplifier circuit</h3>
+      <div id="opampSvgI"></div>
+      <div class="tblWrap"><table class="data" id="opampTblI"></table></div>
+      <p class="note">Z<sub>f</sub>/Z<sub>in</sub> = G<sub>ci</sub>. With i<sub>ref</sub> on the + input the output is
+        v<sub>c</sub> = G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>) + i<sub>ref</sub>: the current loop is exact, the extra
+        i<sub>ref</sub> is small where |G<sub>ci</sub>| ≫ 1 (the simulation uses G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>)).</p>
+    </div>
     <h3>What to look at</h3>
     <ul class="tips" id="ctlTips"></ul>`;
   bindRows('ct', CTL_TARGET, tgtGet, tgtSet, ctlChanged);
@@ -517,21 +525,27 @@ function renderBodeInfo() {
 
 /* ---------- op-amp circuit ---------- */
 function renderOpamp(L) {
-  const v = L.opamp, t = L.cfg.comp.type;
   const val = (x, u) => x == null ? null : fmtSI(x, u, 3);
-  const parts = [['R1', val(v.R1, 'Ω')], ['R2', val(v.R2, 'Ω')], ['C1', val(v.C1, 'F')], ['C2', val(v.C2, 'F')],
-    ['R3', val(v.R3, 'Ω')], ['C3', val(v.C3, 'F')], ['R<sub>bot</sub> (DC only)', val(L.Rbot, 'Ω')]].filter(r => r[1]);
-  $('#opampTbl').innerHTML = `<tr><th class="l">Part</th><th>Value</th></tr>` + parts.map(([n, x]) => `<tr><td class="l">${n}</td><td>${x}</td></tr>`).join('');
-  $('#opampSvg').innerHTML = opampSVG(t, v);
+  const table = (v, extra) => `<tr><th class="l">Part</th><th>Value</th></tr>` + [['R1', val(v.R1, 'Ω')], ['R2', val(v.R2, 'Ω')], ['C1', val(v.C1, 'F')], ['C2', val(v.C2, 'F')],
+    ['R3', val(v.R3, 'Ω')], ['C3', val(v.C3, 'F')], ...extra].filter(r => r[1]).map(([n, x]) => `<tr><td class="l">${n}</td><td>${x}</td></tr>`).join('');
+  $('#opampTbl').innerHTML = table(L.opamp, [['R<sub>bot</sub> (DC only)', val(L.Rbot, 'Ω')]]);
+  $('#opampSvg').innerHTML = opampSVG(L.cfg.comp.type, L.opamp);
+  const ac = !!L.opampI;
+  $('#opampIBlock').hidden = !ac;
+  if (ac) { $('#opampTblI').innerHTML = table(L.opampI, []); $('#opampSvgI').innerHTML = opampSVG(L.cfg.ci.type, L.opampI, 'i'); }
 }
 
-function opampSVG(t, v) {
+// kind 'v': voltage error amplifier (input vo, Rbot and Vref for DC); 'i': ACMC current
+// amplifier (input Ri·iL, iref on the + input).
+function opampSVG(t, v, kind = 'v') {
   const lbl = (x, y, name, value) => `<text x="${x}" y="${y}" text-anchor="middle">${name} <tspan class="val">${value}</tspan></text>`;
   const fv = (x, u) => fmtSI(x, u, 3);
   const w = pts => `<polyline class="wire" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
-  let s = `<svg viewBox="0 -6 560 276" role="img" aria-label="Error amplifier circuit">`;
-  // input: vo -> R1 -> inverting node (x=290, y=150)
-  s += `<text x="8" y="155">v<tspan font-size="11" dy="3">o</tspan></text><circle class="node" cx="34" cy="150" r="3.5"/>`;
+  const ci = kind === 'i';
+  let s = `<svg viewBox="0 -6 560 276" role="img" aria-label="${ci ? 'Current amplifier' : 'Error amplifier'} circuit">`;
+  // input: vo (or Ri·iL) -> R1 -> inverting node (x=290, y=150)
+  s += (ci ? `<text x="4" y="134">R<tspan font-size="11" dy="3">i</tspan><tspan dy="-3">·i</tspan><tspan font-size="11" dy="3">L</tspan></text>`
+    : `<text x="8" y="155">v<tspan font-size="11" dy="3">o</tspan></text>`) + `<circle class="node" cx="34" cy="150" r="3.5"/>`;
   s += svgComp('R', 60, 150, 200, 150) + w([[34, 150], [60, 150]]) + w([[200, 150], [290, 150]]);
   s += lbl(130, 176, 'R1', fv(v.R1, 'Ω'));
   if (t === 'T3') {
@@ -556,7 +570,12 @@ function opampSVG(t, v) {
     }
   }
   s += w([[410, 165], [500, 165]]) + `<circle class="node" cx="470" cy="165" r="3.5"/>`;
-  s += `<text x="506" y="160">v<tspan font-size="11" dy="3">c</tspan></text><text x="506" y="182" class="val">${{ pcmc: 'to current comparator', acmc: 'to current amplifier' }[CTL.cfg.mode] || 'to PWM'}</text>`;
+  const dest = ci ? 'to PWM' : { pcmc: 'to current comparator', acmc: 'to current amplifier' }[CTL.cfg.mode] || 'to PWM';
+  s += `<text x="506" y="160">${ci || CTL.cfg.mode !== 'acmc' ? 'v<tspan font-size="11" dy="3">c</tspan>' : 'i<tspan font-size="11" dy="3">ref</tspan>'}</text><text x="506" y="182" class="val">${dest}</text>`;
+  if (ci) {   // iref from the voltage amplifier on the + input
+    s += w([[330, 195], [290, 195]]) + `<circle class="node" cx="290" cy="195" r="3.5"/>`;
+    return s + `<text x="282" y="200" text-anchor="end">i<tspan font-size="11" dy="3">ref</tspan><tspan dy="-3"> from the voltage amplifier</tspan></text></svg>`;
+  }
   // DC parts: Rbot from the inverting node to ground, Vref on the + input
   s += w([[260, 150], [260, 180]]) + svgComp('R', 260, 180, 260, 250) + `<circle class="node" cx="260" cy="150" r="3"/>`;
   s += `<text x="248" y="222" text-anchor="end">R<tspan font-size="11" dy="3">bot</tspan></text>`;
@@ -596,7 +615,7 @@ function pcmcTips(L) {
   t.push('The plant curve comes from the switching model itself (one switching period linearized), so it includes the fs/2 effects. It stops at fs/2 because a sampled system repeats above it.');
   if (pl.dcm) t.push('In DCM i<sub>L</sub> starts from zero every period, so an error in i<sub>L</sub> is gone after one period (current-loop pole at 0). There is no subharmonic oscillation, and m<sub>c</sub>, Q<sub>p</sub> do not apply.');
   if (p.topo !== 'buck' && pl.zeros.some(z => z.re > 0)) t.push('The RHP zero of boost and buck-boost is still there in current mode. Keep f<sub>c</sub> below f<sub>RHP</sub>/5.');
-  t.push('Blanking t<sub>b</sub> hides the current spike at turn-on: the comparator is ignored for t<sub>b</sub> after each clock. It also sets a minimum on-time, so at very low duty V<sub>o</sub> goes above the target.');
+  t.push('Blanking t<sub>b</sub> hides the current spike at turn-on: the comparator is ignored for t<sub>b</sub> after each clock. It also sets a minimum on-time. When the needed duty is below it, the controller skips pulses: a pulse is left out when the min on-time alone would pass v<sub>c</sub>.');
   t.push(`v<sub>c</sub> is limited to ${fmtSI(L.cfg.vcMax, 'V')}, so the peak current is limited to about ${fmtSI(L.cfg.vcMax / L.cfg.Ri, 'A')} (cycle-by-cycle current limit). Try the soft-start event.`);
   return t;
 }
