@@ -16,7 +16,7 @@ const found = BROWSERS.filter(p => fs.existsSync(p));
 if (!found.length) { console.error('No Edge or Chrome found'); process.exit(2); }
 
 const page = 'file:///' + path.resolve(__dirname, '..', 'index.html').replace(/\\/g, '/');
-const base = ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars', '--virtual-time-budget=20000'];
+const base = ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars', '--virtual-time-budget=60000'];
 // One fresh profile per call: a browser that hands off to another process keeps its profile
 // locked, and a second browser on the same profile exits at once.
 const profiles = [];

@@ -271,6 +271,19 @@ split by section and diffed against the main files; only the extra functions wer
   Cnode = 1 nF (ringing, BD-S clamp at Vin + Vbd), Losses at 520 px.
 - Still NOT_VERIFIED: real file dialogs and the print preview, real mouse and touch input.
 
+### Single-file build and two fixes
+- `buck-boost-buckBoost-index.html` (untracked) is now a single-file build of this project
+  without the Control page: Design, Converter (steady state = DC operating point, startup =
+  open-loop transient), Losses. Built from the project files by a script outside the repo,
+  which drops the control scripts, CSS and markup and removes the control branches in
+  params, model, scope, ui, selftest, main. Its `?selftest` gives the same 28 lines as the
+  project's Converter/Design/Losses tests; a 35-step click-through passes.
+- Fix: the Phase 11 header fix was checked on the Control page only; the Converter page
+  (it also shows the View switch) still wrapped at 1400 px. Header gap 14 -> 8 px and
+  switch-button padding 10 -> 7 px; one line at 1400 px on Converter and Control.
+- Fix: `tests/browser.js uitest` came back empty about 1 run in 8 (the 20 s virtual-time
+  budget ran out during the efficiency run). Budget 60 s: 6 of 6 runs pass.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
