@@ -82,7 +82,7 @@ function label(ctx, txt, x, y, color, align = 'left', base = 'top') {
   const w = ctx.measureText(txt).width, h = 17 * dpr, pad = 3 * dpr;
   let bx = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
   let by = base === 'top' ? y : base === 'bottom' ? y - h : y - h / 2;
-  ctx.fillStyle = 'rgba(7,11,16,0.78)';
+  ctx.fillStyle = scopePal().labelBg;
   ctx.fillRect(bx - pad, by - 1, w + 2 * pad, h + 2);
   ctx.fillStyle = color;
   ctx.fillText(txt, x, y + (base === 'top' ? 1 : base === 'bottom' ? -1 : 0));
@@ -125,7 +125,7 @@ function chanMaps(res, win, H) {
       info = { scale, y0 };
     }
     out.push({
-      c, i, s, arr, tha, mean, thMean, thOff, info, color: CH_COLORS[i],
+      c, i, s, arr, tha, mean, thMean, thOff, info, color: chColor(i),
       Y: v => Y(v - mean), Yth: v => Y(v - thMean),
     });
   });
@@ -135,8 +135,8 @@ function chanMaps(res, win, H) {
 function renderScope() {
   const res = RES; if (!res) return;
   const cv = els.scope, ctx = cv.getContext('2d');
-  const W = cv.width, H = cv.height;
-  ctx.fillStyle = '#070b10'; ctx.fillRect(0, 0, W, H);
+  const W = cv.width, H = cv.height, pal = scopePal();
+  ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, W, H);
   const win = timeWindow(res);
   const X = t => (t - win.t0) / win.span * W;
 
@@ -144,14 +144,14 @@ function renderScope() {
   if (state.shade) {
     const segs = segments(res, win);
     if (segs) {
-      const fill = ['rgba(34,197,94,0.10)', 'rgba(249,115,22,0.09)', 'rgba(148,163,184,0.10)', 'rgba(192,132,252,0.22)', 'rgba(192,132,252,0.22)'];
+      const fill = pal.fill;
       for (const [a, b, st] of segs) {
         const xa = X(a), xb = X(b);
         if (xb < 0 || xa > W) continue;
         ctx.fillStyle = fill[st]; ctx.fillRect(xa, 0, xb - xa, H);
         if (xb - xa > 34 * dpr) {
           ctx.font = `${12 * dpr}px ui-monospace, Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-          ctx.fillStyle = 'rgba(203,213,225,0.55)';
+          ctx.fillStyle = pal.stName;
           ctx.fillText(ST_NAME[st], (Math.max(xa, 0) + Math.min(xb, W)) / 2, H - 4 * dpr);
         }
       }
@@ -160,12 +160,12 @@ function renderScope() {
 
   // graticule 10 x 8
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = pal.grid;
   ctx.beginPath();
   for (let i = 1; i < 10; i++) { const x = Math.round(i * W / 10) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, H); }
   for (let i = 1; i < 8; i++) { const y = Math.round(i * H / 8) + 0.5; ctx.moveTo(0, y); ctx.lineTo(W, y); }
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  ctx.strokeStyle = pal.axis;
   ctx.beginPath();
   const cx = Math.round(W / 2) + 0.5, cy = Math.round(H / 2) + 0.5;
   for (let i = 0; i <= 50; i++) { const x = i * W / 50; ctx.moveTo(x, cy - 3 * dpr); ctx.lineTo(x, cy + 3 * dpr); }
@@ -178,7 +178,7 @@ function renderScope() {
 
   // lanes (split)
   if (state.layout === 'split') {
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.strokeStyle = pal.lane;
     ctx.beginPath();
     maps.forEach((mp, j) => { if (j > 0) { const y = Math.round(mp.info.top) + 0.5; ctx.moveTo(0, y); ctx.lineTo(W, y); } });
     ctx.stroke();
@@ -207,7 +207,7 @@ function renderScope() {
     ctx.save();
     if (state.layout === 'split') { ctx.beginPath(); ctx.rect(0, mp.info.top, W, mp.info.laneH); ctx.clip(); }
     ctx.strokeStyle = mp.color; ctx.lineWidth = 1.7 * dpr; ctx.lineJoin = 'round';
-    ctx.shadowColor = mp.color; ctx.shadowBlur = 3 * dpr;
+    ctx.shadowColor = mp.color; ctx.shadowBlur = pal.glow * dpr;
     drawSeries(ctx, res.rec, mp.arr, win, W, mp.Y, Tp);
     ctx.restore();
   }
@@ -242,7 +242,7 @@ function renderScope() {
   if (res.steady) {
     const xt = X(0);
     if (xt >= 0 && xt <= W) {
-      ctx.fillStyle = '#fb923c';
+      ctx.fillStyle = pal.mark;
       ctx.beginPath(); ctx.moveTo(xt - 6 * dpr, 0); ctx.lineTo(xt + 6 * dpr, 0); ctx.lineTo(xt, 9 * dpr); ctx.fill();
     }
   }
@@ -250,12 +250,12 @@ function renderScope() {
   for (const ev of res.events || []) {
     const x = Math.round(X(ev.t)) + 0.5;
     if (x < 0 || x > W) continue;
-    ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 1 * dpr; ctx.setLineDash([2 * dpr, 3 * dpr]);
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 1 * dpr; ctx.setLineDash([2 * dpr, 3 * dpr]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
-    label(ctx, ev.text, x + 3 * dpr, H - 24 * dpr, '#fb923c', 'left', 'bottom');
+    label(ctx, ev.text, x + 3 * dpr, H - 24 * dpr, pal.mark, 'left', 'bottom');
   }
   // cursors
-  [[state.c1, '#f8fafc', 'C1'], [state.c2, '#94a3b8', 'C2']].forEach(([f, col, nm]) => {
+  [[state.c1, pal.c1, 'C1'], [state.c2, pal.c2, 'C2']].forEach(([f, col, nm]) => {
     const x = Math.round(f * W) + 0.5;
     ctx.strokeStyle = col; ctx.lineWidth = 1 * dpr; ctx.setLineDash([6 * dpr, 4 * dpr]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
@@ -281,7 +281,7 @@ function renderReadout() {
     // hide integration noise, e.g. the mean of vL shown as 1e-13 V
     if (Math.abs(st.mean) < 1e-7 * Math.max(Math.abs(st.min), Math.abs(st.max))) st.mean = 0;
     const v1 = valueAt(res, c.sig, t1), v2 = valueAt(res, c.sig, t2);
-    h += `<tr><td style="color:${CH_COLORS[i]};font-weight:700">CH${i + 1}</td><td class="l">${s.n}</td>` +
+    h += `<tr><td style="color:${chColor(i)};font-weight:700">CH${i + 1}</td><td class="l">${s.n}</td>` +
       `<td>${fmtSI(st.mean, u)}</td><td>${fmtSI(st.min, u)}</td><td>${fmtSI(st.max, u)}</td>` +
       `<td>${fmtSI(st.pp, u)}</td><td>${fmtSI(st.rms, u)}</td><td>${fmtSI(v1, u)}</td><td>${fmtSI(v2, u)}</td><td>${fmtSI(v2 - v1, u)}</td></tr>`;
   });

@@ -38,6 +38,23 @@ const CL_SIGNALS = [
 ];
 const SIG = Object.fromEntries([...SIGNALS, ...CL_SIGNALS].map(s => [s.k, s]));
 const CH_COLORS = ['#facc15', '#22d3ee', '#f472b6', '#4ade80'];
+// Scope screen colors. Dark is the default; light is for saving pictures (PNG export).
+const SCOPE_PAL = {
+  dark: {
+    bg: '#070b10', labelBg: 'rgba(7,11,16,0.78)', stName: 'rgba(203,213,225,0.55)', grid: 'rgba(255,255,255,0.08)',
+    axis: 'rgba(255,255,255,0.20)', lane: 'rgba(255,255,255,0.22)', mark: '#fb923c', c1: '#f8fafc', c2: '#94a3b8', glow: 3,
+    ch: CH_COLORS,
+    fill: ['rgba(34,197,94,0.10)', 'rgba(249,115,22,0.09)', 'rgba(148,163,184,0.10)', 'rgba(192,132,252,0.22)', 'rgba(192,132,252,0.22)'],
+  },
+  light: {
+    bg: '#ffffff', labelBg: 'rgba(255,255,255,0.85)', stName: 'rgba(51,65,85,0.70)', grid: 'rgba(15,23,42,0.10)',
+    axis: 'rgba(15,23,42,0.30)', lane: 'rgba(15,23,42,0.30)', mark: '#c2410c', c1: '#0f172a', c2: '#64748b', glow: 0,
+    ch: ['#a16207', '#0e7490', '#be185d', '#15803d'],
+    fill: ['rgba(34,197,94,0.12)', 'rgba(249,115,22,0.12)', 'rgba(100,116,139,0.10)', 'rgba(147,51,234,0.14)', 'rgba(147,51,234,0.14)'],
+  },
+};
+const scopePal = () => SCOPE_PAL[state.scopeBg] || SCOPE_PAL.dark;
+const chColor = i => scopePal().ch[i];
 
 const PARAMS = [
   { k: 'Vg', label: 'Input voltage V<sub>in</sub>', unit: 'V', min: 1, max: 400, step: 0.1, def: 12 },
@@ -61,7 +78,7 @@ const PDEF = Object.fromEntries([...PARAMS, ...NONIDEAL].map(d => [d.k, d]));
 
 const state = {
   topo: 'buck', nonideal: false, sync: false, view: 'steady',
-  layout: 'split', theory: true, shade: true,
+  layout: 'split', theory: true, shade: false, scopeBg: 'dark',
   tdiv: 'auto', hpos: 0.1, win: 'auto',
   c1: 0.3, c2: 0.55, playing: false, applyNote: '',
   p: {},

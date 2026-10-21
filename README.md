@@ -28,7 +28,8 @@ from a local file), with no build step and no dependencies. It has four pages:
 - Ideal or non-ideal parts (ESR, inductor DCR, switch R<sub>on</sub>, diode drop),
   asynchronous diode or synchronous MOSFET, dead time with body diodes, switch-node
   capacitance that rings in DCM.
-- Scope export as CSV and PNG.
+- Scope export as CSV and PNG. The scope screen can be dark (default) or light; light is
+  handy for pictures in reports.
 - Compensators P, I, PI, Type 2 and Type 3, with k-factor auto design for a target
   crossover and phase margin.
 - Bode plot of plant, compensator, loop gain, closed loop and closed-loop Zout, with

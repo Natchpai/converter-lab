@@ -121,6 +121,20 @@ function runUiTests() {
     for (let i = 1; i < r.n; i++) if (r.st[i] === IDLE && r.st[i - 1] === IDLE && r.iL[i - 1] * r.iL[i] < 0) z++;
     if (!RES.m.ring || z < 3) throw new Error(`ring ${RES.m.ring}, ${z} zero crossings of iL while IDLE`);
   });
+  step('scope screen light, then dark', () => {
+    // median brightness over a grid of points: the background dominates
+    const px = () => {
+      const cv = els.scope, d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, v = [];
+      for (let y = 5; y < cv.height; y += 23) for (let x = 5; x < cv.width; x += 31) { const k = 4 * (y * cv.width + x); v.push((d[k] + d[k + 1] + d[k + 2]) / 3); }
+      v.sort((p, q) => p - q); return [Math.round(v[v.length >> 1])];
+    };
+    click('[data-group="scopeBg"] [data-v="light"]'); renderScope();
+    const a = px();
+    if (state.scopeBg !== 'light' || !els.screen.classList.contains('light') || Math.min(...a) < 200) throw new Error(`light: pixel ${a}`);
+    click('[data-group="scopeBg"] [data-v="dark"]'); renderScope();
+    const b = px();
+    if (state.scopeBg !== 'dark' || els.screen.classList.contains('light') || Math.max(...b) > 60) throw new Error(`dark: pixel ${b}`);
+  });
   step('CSV export text', () => {
     const t = scopeCSV(RES), n = t.split('\n').length;
     if (n < 100 || /NaN/.test(t)) throw new Error(`${n} lines`);

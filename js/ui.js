@@ -47,7 +47,7 @@ function updateNonIdealUI() {
 const SCALES = []; for (let e = -3; e <= 2; e++) for (const m of [1, 2, 5]) SCALES.push(m * 10 ** e);
 function buildChannels() {
   els.chanRow.innerHTML = state.ch.map((c, i) => `
-    <div class="ch ${c.on ? '' : 'off'}" style="--c:${CH_COLORS[i]}" id="ch${i}">
+    <div class="ch ${c.on ? '' : 'off'}" style="--c:${chColor(i)}" id="ch${i}">
       <div class="h">CH${i + 1}<label><input type="checkbox" class="on" ${c.on ? 'checked' : ''}> on</label></div>
       <select class="sig" aria-label="CH${i + 1} signal">${(state.page === 'control' ? [...SIGNALS, ...CL_SIGNALS] : SIGNALS).map(s => `<option value="${s.k}" ${s.k === c.sig ? 'selected' : ''} title="${s.d}">${s.n}: ${s.d}</option>`).join('')}</select>
       <div class="r2"><select class="scale" aria-label="CH${i + 1} scale"></select>
@@ -107,6 +107,7 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
     if (grp === 'view') { state.hpos = v === 'steady' ? 0.1 : 0; $('#hposRange').value = state.hpos; state.tdiv = 'auto'; $('#tdivSel').value = 'auto'; }
     if (grp === 'topo' || grp === 'sync') { buildSchem(); buildSpecUI(); buildCompUI(); requestDesign(); }
     if (grp === 'layout') { updateChannelUI(); updateSegs(); renderLive(); return; }
+    if (grp === 'scopeBg') { applyScopeBg(); return; }
     updateSegs(); updateNonIdealUI(); requestCompute();
   });
 });
@@ -232,6 +233,17 @@ try { const t = localStorage.getItem('dcdc-theme'); if (t === 'light' || t === '
 document.querySelectorAll('#themeSeg button').forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.t)));
 darkMQ.addEventListener('change', () => { updateThemeSeg(); drawPageCanvas(); });
 updateThemeSeg();
+
+/* ---------- scope screen: dark (default) or light ---------- */
+function applyScopeBg() {
+  els.screen.classList.toggle('light', state.scopeBg === 'light');
+  try { localStorage.setItem('dcdc-scope-bg', state.scopeBg); } catch (e) { /* storage blocked: applies for this visit */ }
+  updateSegs();
+  state.ch.forEach((c, i) => { const el = $('#ch' + i); if (el) el.style.setProperty('--c', chColor(i)); });
+  renderLive();
+}
+try { if (localStorage.getItem('dcdc-scope-bg') === 'light') state.scopeBg = 'light'; } catch (e) { /* ignore */ }
+els.screen.classList.toggle('light', state.scopeBg === 'light');
 
 /* ---------- render scheduling ---------- */
 let pendingCompute = false, pendingRender = false;

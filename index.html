@@ -129,13 +129,17 @@
         <button data-v="split">Split</button><button data-v="overlay">Overlay</button>
       </div>
       <label class="convOnly"><input type="checkbox" id="theoryChk" checked> Theory overlay</label>
-      <label><input type="checkbox" id="shadeChk" checked> Shade intervals</label>
+      <label><input type="checkbox" id="shadeChk"> Shade intervals</label>
     </div>
     <div class="scopeHead">
       <label>Time/div <select id="tdivSel"></select></label>
       <label style="flex:1 1 160px">Position <input type="range" id="hposRange" min="0" max="1" step="0.005" value="0.1"></label>
       <label id="winWrap" class="convOnly">Startup window <select id="winSel"></select></label>
       <span class="grow"></span>
+      <span>Screen</span>
+      <div class="seg small" data-group="scopeBg" role="group" aria-label="Scope screen color" title="Light screen is handy for saving a picture (PNG)">
+        <button data-v="dark">Dark</button><button data-v="light">Light</button>
+      </div>
       <button class="btn" id="csvBtn" title="Download the enabled channels as CSV">CSV</button>
       <button class="btn" id="pngBtn" title="Download the scope screen as PNG">PNG</button>
     </div>

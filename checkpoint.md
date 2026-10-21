@@ -284,6 +284,18 @@ split by section and diffed against the main files; only the extra functions wer
 - Fix: `tests/browser.js uitest` came back empty about 1 run in 8 (the 20 s virtual-time
   budget ran out during the efficiency run). Budget 60 s: 6 of 6 runs pass.
 
+### Scope screen dark / light
+- New "Screen: Dark | Light" switch in the scope time-base row (Converter and Control). Dark
+  is the default; the choice is kept in localStorage (`dcdc-scope-bg`). It only changes the
+  scope canvas, not the page theme, so a light PNG can be saved from a dark page.
+- One palette per screen (`SCOPE_PAL` in `params.js`): background, grid, labels, interval
+  shading, cursors, trigger and event marks, trace glow (off on light), and darker channel
+  colors on light (yellow and cyan do not show on white). Channel cards and the measurement
+  table use the same colors (`chColor`).
+- Checks: Node ALL PASS (unchanged), browser selftest ALL PASS, UI test 78 checks ALL PASS
+  (new: median screen brightness light > 200, dark < 60). Screenshots: light screen on a dark
+  page, split and overlay views.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
