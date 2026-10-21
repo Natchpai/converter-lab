@@ -245,6 +245,14 @@ function renderScope() {
       ctx.beginPath(); ctx.moveTo(xt - 6 * dpr, 0); ctx.lineTo(xt + 6 * dpr, 0); ctx.lineTo(xt, 9 * dpr); ctx.fill();
     }
   }
+  // test events (closed-loop simulation)
+  for (const ev of res.events || []) {
+    const x = Math.round(X(ev.t)) + 0.5;
+    if (x < 0 || x > W) continue;
+    ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 1 * dpr; ctx.setLineDash([2 * dpr, 3 * dpr]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
+    label(ctx, ev.text, x + 3 * dpr, H - 24 * dpr, '#fb923c', 'left', 'bottom');
+  }
   // cursors
   [[state.c1, '#f8fafc', 'C1'], [state.c2, '#94a3b8', 'C2']].forEach(([f, col, nm]) => {
     const x = Math.round(f * W) + 0.5;

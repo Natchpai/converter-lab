@@ -28,6 +28,7 @@ function computeRes(p, view, win) {
 }
 
 function sigArr(res, key) {
+  if (res.sigArray) { if (!res.cache[key]) res.cache[key] = res.sigArray(key); return res.cache[key]; }
   if (!res.cache[key]) {
     const r = res.rec, a = new Float64Array(r.n);
     for (let i = 0; i < r.n; i++) a[i] = res.m.sig(key, r.st[i], r.iL[i], r.vC[i]);
@@ -95,4 +96,12 @@ function stateAt(res, t) {
   }
   return { st: r.st[i], iL: r.iL[i], vC: r.vC[i] };
 }
-function valueAt(res, key, t) { const s = stateAt(res, t); return res.m.sig(key, s.st, s.iL, s.vC); }
+function valueAt(res, key, t) {
+  if (res.sigArray) {   // closed loop: interpolate the recorded signal
+    const r = res.rec, a = sigArr(res, key);
+    t = clamp(t, r.t[0], r.t[r.n - 1]);
+    const i = clamp(upperBound(r.t, r.n, t) - 1, 0, r.n - 2), dt = r.t[i + 1] - r.t[i];
+    return dt > 0 ? a[i] + (a[i + 1] - a[i]) * (t - r.t[i]) / dt : a[i + 1];
+  }
+  const s = stateAt(res, t); return res.m.sig(key, s.st, s.iL, s.vC);
+}

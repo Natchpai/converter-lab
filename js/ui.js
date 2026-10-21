@@ -13,13 +13,18 @@ function buildParams(list, host) {
     </div>`).join('');
   for (const d of list) {
     const sl = $('#sl-' + d.k), nb = $('#nb-' + d.k);
-    sl.addEventListener('input', () => { state.p[d.k] = sliderVal(d, sl.value); nb.value = fmtParam(d, state.p[d.k]); requestCompute(); });
+    sl.addEventListener('input', () => { state.p[d.k] = sliderVal(d, sl.value); nb.value = fmtParam(d, state.p[d.k]); paramChanged(); });
     nb.addEventListener('change', () => {
       let v = parseSI(nb.value);
       if (isFinite(v)) state.p[d.k] = clamp(v, d.min, d.max);
       syncParam(d.k); requestCompute();
     });
   }
+}
+// Circuit parameter moved. The Control page reruns its closed-loop simulation after a short
+// pause (it takes ~100-200 ms); the Bode plot follows right away.
+function paramChanged() {
+  if (state.page === 'control') { requestControlRender(); scheduleSim(200); } else requestCompute();
 }
 function syncParam(k) {
   const d = PDEF[k];
@@ -44,7 +49,7 @@ function buildChannels() {
   els.chanRow.innerHTML = state.ch.map((c, i) => `
     <div class="ch ${c.on ? '' : 'off'}" style="--c:${CH_COLORS[i]}" id="ch${i}">
       <div class="h">CH${i + 1}<label><input type="checkbox" class="on" ${c.on ? 'checked' : ''}> on</label></div>
-      <select class="sig" aria-label="CH${i + 1} signal">${SIGNALS.map(s => `<option value="${s.k}" ${s.k === c.sig ? 'selected' : ''} title="${s.d}">${s.n}: ${s.d}</option>`).join('')}</select>
+      <select class="sig" aria-label="CH${i + 1} signal">${(state.page === 'control' ? [...SIGNALS, ...CL_SIGNALS] : SIGNALS).map(s => `<option value="${s.k}" ${s.k === c.sig ? 'selected' : ''} title="${s.d}">${s.n}: ${s.d}</option>`).join('')}</select>
       <div class="r2"><select class="scale" aria-label="CH${i + 1} scale"></select>
         <select class="cpl" aria-label="CH${i + 1} coupling"><option value="dc">DC</option><option value="ac" ${c.ac ? 'selected' : ''}>AC</option></select></div>
       <div class="pos">Position <input type="range" class="posr" min="-4" max="4" step="0.1" value="${c.pos}" aria-label="CH${i + 1} position"></div>

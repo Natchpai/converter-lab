@@ -20,7 +20,17 @@ const SIGNALS = [
   { k: 'io',   n: 'io',   u: 'A', d: 'Load current' },
   { k: 'gate', n: 'gate', u: '',  d: 'Gate signal of S (1 = ON)' },
 ];
-const SIG = Object.fromEntries(SIGNALS.map(s => [s.k, s]));
+// Extra signals that exist only in the closed-loop simulation (Control page).
+const CL_SIGNALS = [
+  { k: 'vc',    n: 'vc',    u: 'V', d: 'Control voltage (compensator output)' },
+  { k: 'ramp',  n: 'ramp',  u: 'V', d: 'PWM ramp compared with vc' },
+  { k: 'duty',  n: 'duty',  u: '',  d: 'Duty cycle of each period' },
+  { k: 'vref',  n: 'vref',  u: 'V', d: 'Reference voltage' },
+  { k: 'vfb',   n: 'vfb',   u: 'V', d: 'Feedback H·|vo|' },
+  { k: 'verr',  n: 'verr',  u: 'V', d: 'Error vref − H·|vo|' },
+  { k: 'voavg', n: 'vo avg', u: 'V', d: 'Output voltage averaged over each period' },
+];
+const SIG = Object.fromEntries([...SIGNALS, ...CL_SIGNALS].map(s => [s.k, s]));
 const CH_COLORS = ['#facc15', '#22d3ee', '#f472b6', '#4ade80'];
 
 const PARAMS = [
@@ -61,8 +71,8 @@ state.pages = {
     ch: [
       { on: true, sig: 'vo',   scale: 'auto', pos: 0, ac: false },
       { on: true, sig: 'iL',   scale: 'auto', pos: 0, ac: false },
-      { on: true, sig: 'vsw',  scale: 'auto', pos: 0, ac: false },
-      { on: true, sig: 'gate', scale: 'auto', pos: 0, ac: false },
+      { on: true, sig: 'vc',   scale: 'auto', pos: 0, ac: false },
+      { on: true, sig: 'duty', scale: 'auto', pos: 0, ac: false },
     ],
     tdiv: 'auto', hpos: 0,
   },

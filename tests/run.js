@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const PURE = ['params', 'util', 'model', 'sim', 'theory', 'results', 'selftest', 'cplx', 'plant', 'comp', 'loop', 'selftest-cl'];
+const PURE = ['params', 'util', 'model', 'sim', 'theory', 'results', 'selftest', 'cplx', 'plant', 'comp', 'loop', 'simcl', 'selftest-cl'];
 
 const js = path.join(__dirname, '..', 'js');
 const code = PURE.map(n => `// ---- ${n}.js\n` + fs.readFileSync(path.join(js, n + '.js'), 'utf8')).join('\n;\n')

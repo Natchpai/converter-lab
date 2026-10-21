@@ -11,6 +11,8 @@ const CTL = {
     comp: { type: 'T3', K: 1, fi: 100, fz1: 1e3, fz2: 1e3, fp1: 20e3, fp2: 50e3 },
     fcT: 10e3, pmT: 60,
   },
+  // transient test for the closed-loop switching simulation (step size per event, %)
+  tr: { event: 'load', size: { load: 100, vin: 25, vref: 10, start: 0 }, back: true, nPer: 'auto' },
 };
 
 const CTL_SIDE = [
@@ -44,11 +46,13 @@ const CTL_TARGET = [
   { k: 'fcT', label: 'Target crossover f<sub>c</sub>', unit: 'Hz', min: 1, max: 5e5, log: true },
   { k: 'pmT', label: 'Target phase margin', unit: '°', min: 10, max: 85, step: 1 },
 ];
+const CTL_TR = [{ k: 'size', label: 'Step size s', unit: '%', min: -50, max: 200, step: 5 }];
 const CTL_OPAMP = [{ k: 'R1', label: 'Upper divider resistor R<sub>1</sub>', unit: 'Ω', min: 1e3, max: 1e6, log: true }];
 
 /* ---------- parameter rows (same look as the circuit parameters) ---------- */
 function fmtCtl(d, v) {
   if (d.unit === '°') return v.toFixed(0) + '°';
+  if (d.unit === '%') return v.toFixed(0) + ' %';
   if (d.unit) return fmtSI(v, d.unit, 3);
   return Math.abs(v) >= 1e3 || Math.abs(v) < 1e-2 ? v.toPrecision(3) : v.toFixed(3);
 }
@@ -124,11 +128,16 @@ function buildCompRows() {
   syncRows('cc', defs, compGet);
 }
 
-// A control setting changed. Compensator and target changes only redraw the Bode plot;
-// changes that move the operating point also recompute the scope.
+// A control setting changed: redraw the Bode plot now, and rerun the switching simulation
+// (~100-200 ms) after a short pause while a slider is still moving.
 function ctlChanged(key, final) {
-  if (['Vt', 'Vm', 'Dmax'].includes(key) && final) { requestCompute(); return; }
   requestControlRender();
+  scheduleSim(final ? 0 : 250);
+}
+let simTimer = 0;
+function scheduleSim(ms) {
+  clearTimeout(simTimer);
+  simTimer = setTimeout(() => { if (state.page === 'control') requestCompute(); }, ms);
 }
 let pendingCtl = false;
 function requestControlRender() {
@@ -145,6 +154,13 @@ function buildControlUI() {
       </div>
       ${rowsHTML('cs', CTL_SIDE)}
       <div class="kv" id="ctlOp"></div>
+    </div>
+    <h2>Transient test</h2>
+    <div class="ctlBlock">
+      <label class="ctlInline trEv">Event <select id="trEvent">${Object.entries(CL_EVENTS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select></label>
+      ${rowsHTML('tr', CTL_TR)}
+      <label class="ctlInline"><input type="checkbox" id="trBack" checked> Step back later</label>
+      <label class="ctlInline" style="margin-left:12px">Length <select id="trLen">${['auto', 100, 200, 500, 1000, 2000, 3000].map(v => `<option value="${v}">${v === 'auto' ? 'Auto' : v + ' periods'}</option>`).join('')}</select></label>
     </div>`;
   CTL.design.innerHTML = `
     <h3>Compensator</h3>
@@ -164,6 +180,8 @@ function buildControlUI() {
     <div id="loopOk"></div>
     <div class="kv" id="loopKv"></div>
     <ul class="warnList" id="loopWarn"></ul>
+    <h3>Step response (switching simulation)</h3>
+    <div class="kv" id="stepKv"></div>
     <h3>Error amplifier circuit</h3>
     ${rowsHTML('co', CTL_OPAMP)}
     <div id="opampSvg"></div>
@@ -174,17 +192,24 @@ function buildControlUI() {
   bindRows('ct', CTL_TARGET, tgtGet, tgtSet, ctlChanged);
   bindRows('co', CTL_OPAMP, k => CTL.cfg[k], (k, v) => { CTL.cfg[k] = v; }, ctlChanged);
   syncRows('ct', CTL_TARGET, tgtGet); syncRows('co', CTL_OPAMP, k => CTL.cfg[k]);
+  const trGet = () => CTL.tr.size[CTL.tr.event], trSet = (k, v) => { CTL.tr.size[CTL.tr.event] = v; };
+  bindRows('tr', CTL_TR, trGet, trSet, (k, final) => scheduleSim(final ? 0 : 250));
+  syncRows('tr', CTL_TR, trGet);
+  $('#trEvent').addEventListener('change', e => { CTL.tr.event = e.target.value; syncRows('tr', CTL_TR, trGet); updateTrUI(); requestCompute(); });
+  $('#trBack').addEventListener('change', e => { CTL.tr.back = e.target.checked; requestCompute(); });
+  $('#trLen').addEventListener('change', e => { CTL.tr.nPer = e.target.value; requestCompute(); });
+  updateTrUI();
   buildCompRows();
   CTL.built = true;
   $('#compType').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     CTL.cfg.comp.type = b.dataset.t;
-    autoDesign(); buildCompRows(); updateCtlSegs(); requestControlRender();
+    autoDesign(); buildCompRows(); updateCtlSegs(); ctlChanged(null, true);
   });
-  $('#btnAuto').addEventListener('click', () => { autoDesign(); requestControlRender(); });
-  $('#btnSuggest').addEventListener('click', () => { autoDesign('suggest'); requestControlRender(); });
+  $('#btnAuto').addEventListener('click', () => { autoDesign(); ctlChanged(null, true); });
+  $('#btnSuggest').addEventListener('click', () => { autoDesign('suggest'); ctlChanged(null, true); });
   $('#btnTextbook').addEventListener('click', () => {
-    CTL.cfg.comp.type = 'T3'; autoDesign('textbook'); buildCompRows(); updateCtlSegs(); requestControlRender();
+    CTL.cfg.comp.type = 'T3'; autoDesign('textbook'); buildCompRows(); updateCtlSegs(); ctlChanged(null, true);
   });
 
   const legend = document.createElement('div');
@@ -203,12 +228,18 @@ function buildControlUI() {
   CTL.bode.addEventListener('pointerleave', () => { CTL.hoverF = null; drawBode(); });
   updateCtlSegs();
 }
+function updateTrUI() {
+  const start = CTL.tr.event === 'start';
+  $('#tr-row-size').classList.toggle('dis', start);
+  $('#tr-sl-size').disabled = start; $('#tr-nb-size').disabled = start;
+  $('#trBack').disabled = start;
+}
 function updateCtlSegs() {
   document.querySelectorAll('#ctlMode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === CTL.cfg.mode)));
   document.querySelectorAll('#compType button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === CTL.cfg.comp.type)));
 }
 
-// Scope on the Control page. For now: the open-loop steady state at the operating duty D0.
+// Scope on the Control page: the closed-loop switching simulation with the test event.
 function computeControl() {
   if (CTL.topoKey !== state.topo) {     // new topology: start from a fresh design
     CTL.topoKey = state.topo;
@@ -216,7 +247,11 @@ function computeControl() {
     autoDesign('suggest');
   }
   const L = ctlLoop();
-  return computeRes({ ...effParams(), D: clamp(L.D0, PDEF.D.min, PDEF.D.max) }, 'steady', 'auto');
+  const opt = { event: CTL.tr.event, size: CTL.tr.size[CTL.tr.event], back: CTL.tr.back, ...clSizes(L, CTL.tr.nPer) };
+  const t0 = performance.now();
+  const res = computeResCL(L, opt);
+  res.ms = performance.now() - t0;
+  return res;
 }
 
 /* ---------- render ---------- */
@@ -224,7 +259,7 @@ function renderControl() {
   const L = ctlLoop(), p = L.p, met = RES.met, m = L.m;
   els.badge.textContent = met.mode;
   els.badge.className = 'badge ' + met.mode;
-  els.headVals.textContent = `Vo=${fmtSI(met.vo.mean, 'V')}  D0=${L.D0.toFixed(3)}  fc=${fmtSI(m.fc, 'Hz')}  PM=${isFinite(m.pm) ? m.pm.toFixed(0) + '°' : '–'}`;
+  els.headVals.textContent = `Vo=${fmtSI(met.vo.mean, 'V')}  D=${met.Dfinal.toFixed(3)}  fc=${fmtSI(m.fc, 'Hz')}  PM=${isFinite(m.pm) ? m.pm.toFixed(0) + '°' : '–'}`;
 
   const defs = [
     { id: 'plant', name: 'Plant Gvd = v̂o/d̂', short: 'Gvd', color: '--s1', H: L.plant.Gvd },
@@ -260,10 +295,34 @@ function renderControl() {
     ? `<p class="okLine">Stable, PM ${m.pm.toFixed(0)}°${isFinite(m.gm) ? `, GM ${m.gm.toFixed(0)} dB` : ''}.</p>` : '';
   $('#loopWarn').innerHTML = L.warn.map(w => `<li>${w}</li>`).join('');
   $('#designNotes').innerHTML = CTL.notes.join(' ');
+  renderStep(L);
   renderOpamp(L);
   $('#ctlTips').innerHTML = ctlTips(L).map(t => `<li>${t}</li>`).join('');
 }
 function renderControlLive() { /* cursor-dependent control readouts go here */ }
+
+// Step-response numbers of the last closed-loop run.
+function renderStep(L) {
+  const r = RES;
+  if (!r || !r.cl) { $('#stepKv').innerHTML = ''; return; }
+  const mt = r.met, sg = mt.segs, ev = r.opt.event, rows = [];
+  const dv = x => fmtSI(x, 'V');
+  const seg = (name, g) => {
+    rows.push([`${name}: final V<sub>o</sub>`, dv(g.final)]);
+    rows.push([`${name}: overshoot / dip`, `${dv(g.over)} / ${dv(g.under)}`]);
+    rows.push([`${name}: settling (±${fmtSI(g.band, 'V', 2)})`, g.settled ? fmtSI(g.settle, 's') : 'not settled in the window']);
+  };
+  if (ev === 'start') seg('Soft-start', sg[0]);
+  else {
+    rows.push(['Before the event: V<sub>o</sub>', dv(sg[0].final)]);
+    seg(CL_EVENTS[ev].name.split(' (')[0], sg[1]);
+    if (sg[2]) seg('Step back', sg[2]);
+  }
+  rows.push(['Final error V<sub>o</sub> − V<sub>o</sub>*', dv(mt.err)]);
+  rows.push(['Final duty (switching) / D<sub>0</sub> (averaged)', `${mt.Dfinal.toFixed(4)} / ${L.D0.toFixed(4)}`]);
+  rows.push(['Simulation', `${r.nPer} periods × ${r.N} steps, ${(r.ms || 0).toFixed(0)} ms`]);
+  $('#stepKv').innerHTML = kvHTML(rows);
+}
 
 function kvHTML(rows) { return rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join(''); }
 

@@ -124,5 +124,73 @@ function runControlTests() {
     }
     check(v.ok && worst < 1e-9, `op-amp ${COMP_TYPES[type].name}: Zf/Zin vs H·Gc worst error ${worst.toExponential(1)}`);
   }
+  // ---- time-domain compensator (Tustin) vs analytic step responses
+  {
+    const wz = TWO_PI * 1e3, wp = TWO_PI * 20e3, h = 1 / (200 * wp);
+    const c = makeCompSim({ G: 1, n: 0, wz: [wz], wp: [wp] }, -1e9, 1e9);
+    c.init(0);
+    let t = 0, err = 0;
+    for (let k = 0; k < 2000; k++) {
+      c.step(1, 1, h); t += h;
+      // the trapezoid sees the step as a ramp over the first step: compare with t − h/2
+      if (t > 10 * h) err = Math.max(err, Math.abs(c.y() - (wp / wz + (1 - wp / wz) * (1 - Math.exp(-wp * (t - h / 2))))));
+    }
+    const ci = makeCompSim({ G: 2, n: 1, wz: [], wp: [] }, -1e9, 1e9);
+    ci.init(0); for (let k = 0; k < 100; k++) ci.step(1, 1, 1e-6);
+    check(err < 1e-4 * (wp / wz) && Math.abs(ci.y() - 2e-4) < 1e-15, `compensator sim: lead section step error ${(err / (wp / wz)).toExponential(1)} (rel), integrator ramp exact`);
+  }
+  // ---- closed-loop sim with a frozen integrator at D0 = open-loop steady state
+  {
+    const L = buildLoop(pB, cfgOf({ type: 'T3', K: 1, fz1: 1e3, fz2: 1e3, fp1: 2e4, fp2: 5e4 }, 5));
+    const Lf = { ...L, cn: { G: 0, n: 1, wz: [], wp: [] } };
+    const res = computeResCL(Lf, { event: 'load', size: 0, back: false, nPer: 40, N: 400, pre: 60 });
+    const ol = computeRes({ ...L.p, D: L.D0 }, 'steady');
+    const e = rel(res.met.vo.mean, ol.met.vo.mean);
+    check(e < 2e-4 && Math.abs(res.met.Dfinal - L.D0) < 1e-9, `closed-loop sim, frozen vc: Vo ${res.met.vo.mean.toFixed(5)} vs open loop ${ol.met.vo.mean.toFixed(5)} (${pc(e)}), duty ${res.met.Dfinal.toFixed(6)} vs D0 ${L.D0.toFixed(6)}`);
+  }
+  // ---- VMC closed loop: load step and step back settle to Vo*, final duty near D0
+  const clCase = (name, p, Vt, fc, pm) => {
+    const L0 = buildLoop(p, cfgOf({ type: 'P', K: 1 }, Vt));
+    const d = designComp('T3', L0.plantK, fc, pm, L0.fmin);
+    const L = buildLoop(p, cfgOf(d.comp, Vt));
+    const sz = clSizes(L, 'auto');
+    const t0 = performance.now();
+    const res = computeResCL(L, { event: 'load', size: 100, back: true, ...sz });
+    const ms = performance.now() - t0, mt = res.met, sA = mt.segs[1], sB = mt.segs[2];
+    const ok = rel(sA.final, Vt) < 0.005 && rel(sB.final, Vt) < 0.005 && sA.settled && sB.settled && rel(mt.Dfinal, L.D0) < 0.01;
+    check(ok, `closed loop ${name}: load x2 -> Vo ${sA.final.toFixed(4)} V (dip ${fmtSI(sA.under, 'V')}, settle ${fmtSI(sA.settle, 's')}), back -> ${sB.final.toFixed(4)} V, D ${mt.Dfinal.toFixed(4)} vs D0 ${L.D0.toFixed(4)}, ${sz.nPer}x${sz.N} steps ${ms.toFixed(0)} ms`);
+  };
+  clCase('buck', pB, 5, 10e3, 60);
+  // the transient must not depend on the step size (regression: period-average boundaries)
+  {
+    const pb = { ...base, ...lossy, topo: 'boost', R: 50 }, L0 = buildLoop(pb, cfgOf({ type: 'P', K: 1 }, 24));
+    const L = buildLoop(pb, cfgOf(designComp('T3', L0.plantK, 2e3, 55, L0.fmin).comp, 24));
+    const dip = N => computeResCL(L, { event: 'load', size: 100, back: false, nPer: 400, N, pre: 60 }).met.segs[1].under;
+    const a = dip(50), b = dip(400);
+    check(rel(a, b) < 0.02, `closed loop step-size check: boost dip ${fmtSI(a, 'V')} at N=50 vs ${fmtSI(b, 'V')} at N=400`);
+  }
+  clCase('boost', { ...base, ...lossy, topo: 'boost', R: 50 }, 24, 2e3, 55);
+  clCase('buck-boost', { ...base, ...lossy, topo: 'bb', R: 20 }, 12, 2e3, 55);
+  // ---- soft-start from zero reaches the target without a large overshoot
+  {
+    const L0 = buildLoop(pB, cfgOf({ type: 'P', K: 1 }, 5));
+    const L = buildLoop(pB, cfgOf(designComp('T3', L0.plantK, 10e3, 60, L0.fmin).comp, 5));
+    const res = computeResCL(L, { event: 'start', size: 0, back: false, nPer: 600, N: 200, pre: 0 });
+    const sg = res.met.segs[0];
+    check(rel(sg.final, 5) < 0.005 && sg.over < 0.05 * 5, `soft-start buck: final ${sg.final.toFixed(4)} V, overshoot ${fmtSI(sg.over, 'V')}`);
+  }
+  // ---- period-map model vs averaged model (CCM) and vs DCM reduced order
+  for (const [topo, R, Vt] of [['buck', 10, 5], ['boost', 50, 24]]) {
+    const p = { ...base, ...lossy, topo, R }, D = solveD0(p, Vt).D;
+    const pm = periodMapVMC(p, D), av = averagedPlant({ ...p, D }, D);
+    let worst = 0;
+    for (const f of [10, 100, 1e3, 3e3, 5e3]) worst = Math.max(worst, Math.abs(Cx.db(pm.G(f)) - Cx.db(av.Gvd(f))));
+    check(worst < 0.5, `period map ${topo} CCM: |G| vs averaged Gvd worst ${worst.toFixed(3)} dB up to fs/20`);
+  }
+  for (const [topo, R] of [['buck', 100], ['boost', 500], ['bb', 200]]) {
+    const p = { ...base, topo, R }, th = theory({ ...p, D: 0.5 }), pm = periodMapVMC(p, 0.5);
+    const lam = Math.max(...pm.eig.map(z => z.re)), wp = -Math.log(lam) * p.fs, wx = dcmPlant(p, 0.5, th).wp;
+    check(rel(wp, wx) < 0.05, `period map ${topo} DCM: slow pole ${(wp / TWO_PI).toFixed(2)} Hz vs reduced order ${(wx / TWO_PI).toFixed(2)} Hz (${pc(rel(wp, wx))})`);
+  }
   return { allPass, lines: out };
 }

@@ -198,3 +198,5 @@ body[data-page="control"] #row-D { display: none; }
 #opampSvg svg { width: 100%; max-width: 560px; height: auto; display: block; }
 .designGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 18px; }
 svg tspan.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; fill: var(--muted); }
+.trEv { display: flex !important; width: 100%; margin-bottom: 8px; }
+.trEv select { flex: 1; min-width: 0; }

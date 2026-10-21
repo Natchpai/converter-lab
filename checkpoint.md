@@ -20,7 +20,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 2 | Page switch scaffold (Converter / Control) | done |
 | 3 | Model hooks, complex helpers, averaged plant, Bode (plant) | done |
 | 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | done |
-| 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | todo |
+| 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | done |
 | 6 | Peak current-mode control | todo |
 | 7 | Average current-mode control | todo |
 | 8 | FRA from the switching sim | todo |
@@ -111,6 +111,34 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
   polynomials.
 - Screenshots checked: control page dark 1400 px; op-amp SVGs for all five types.
 
+### Phase 5: closed-loop switching simulation (VMC)
+- `js/simcl.js`: `makeCompSim` (integrator + first-order sections, Tustin with any step h,
+  conditional-integration anti-windup, output clamp 0..1.25·VM), `simulateCL` (fixed grid of N
+  steps per period, trailing-edge PWM with natural sampling: the step is split at the
+  interpolated ramp/vc crossing, Dmax as an event, async diode zero crossing, boost IDLE start;
+  per-period model index for load and Vin steps), `computeResCL` (scope result with
+  `sigArray`, events), `periodAverages`, `clMetrics` (per-period average |vo|: final, overshoot,
+  dip, settling within max(0.1 % Vo*, 10 % of the peak deviation)), `clSizes` (window
+  20·fs/fc, ~100k steps), `periodMapVMC` (one-period map linearized by finite differences).
+- Events: load step R → R/(1+s), Vin step, Vref step, soft-start from zero; optional step back.
+- `results.js`: `sigArr` and `valueAt` use `res.sigArray` when present (closed-loop results).
+- New scope signals (`CL_SIGNALS` in params.js): vc, ramp, duty, vref, vfb, verr, vo avg.
+  The Control page channel list includes them. Event markers drawn on the scope.
+- UI: Transient test block (event, step size, step back, length), step-response readouts,
+  sim time readout. Compensator/target/circuit changes redraw the Bode plot at once and rerun
+  the simulation after 200-250 ms.
+- Correction to the plan: `simulate()` does not round D (it adapts the ON step length), so the
+  VMC period map reuses it.
+- Bugs found by tests and fixed: `sigArray` copied the whole buffer capacity; per-period
+  averages misassigned the last sample of a period (float time drift), which made the dip
+  depend on N.
+- Checks (VERIFIED, Node + headless Edge): Tustin lead section vs analytic 2.7e-6; frozen-vc
+  closed loop = open-loop steady state (duty exact); buck/boost/buck-boost load x2 and back
+  settle to Vo* within 0.5 %, final duty = D0 within 1 %; dip identical at N = 50 and 400;
+  buck soft-start overshoot 25 mV; period map vs averaged Gvd ≤ 0.42 dB up to fs/20 (buck,
+  boost CCM); DCM slow pole from the period map = derived reduced-order wp within 0.02 %.
+- Performance: closed-loop run ~150-190 ms in Node for 200x300 / 1000x94 steps.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -120,6 +148,6 @@ Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
 
 ## Next step
 
-Phase 5: `js/simcl.js` closed-loop switching sim for VMC (event-split stepper, Tustin
-compensator, anti-windup, Dmax), events (load step, Vin step, Vref step, soft-start), new scope
-signals (vc, ramp, duty, vref, err), step metrics, debounced recompute, period-map model.
+Phase 6: peak current-mode control: comparator Ri·iL + Se·t ≥ vc in `simulateCL`, minimum
+on-time / pulse skip, Se control (Se = Sf/2 button), period-map plant with vc as input,
+readouts Sn, Sf, mc, Qp, subharmonic warning, mode seg enabled.
