@@ -1,16 +1,20 @@
 # DC-DC Converter Lab
 
-**Interactive browser lab for buck, boost and buck-boost converters in CCM and DCM, with a
-4-channel scope and a control-loop design page.**
+**Interactive learning tool for buck, boost and buck-boost converters in CCM and DCM: size the
+power stage, watch the switching waveforms on a 4-channel scope, see where the losses go and
+design the control loop.**
+
+- Live site: <https://natchpai.github.io/converter-lab.github.io/>
+- Source: <https://github.com/Natchpai/converter-lab.github.io>
 
 ## Overview
 
-The lab runs in a browser from a local file, with no build step and no dependencies. It has
-four pages:
+The lab is made for learning. Each page puts the simulated waveforms or numbers next to the
+equations, with short notes on what to look at. It runs in a browser (on the live site, or
+from a local file), with no build step and no dependencies. It has four pages:
 
 - **Design**: specification in, L and C sizing (E12), operating points at V<sub>in</sub> min,
   nom and max with D solved on the switching model, stress vs rating, save/load and print.
-
 - **Converter**: the switched converter model with a steady-state (shooting method) and a
   startup view, a 4-channel scope, schematic, theory table and mode map.
 - **Losses**: loss breakdown (conduction, switching, node capacitance, Q<sub>rr</sub>, gate,
@@ -29,10 +33,11 @@ four pages:
   crossover and phase margin.
 - Bode plot of plant, compensator, loop gain, closed loop and closed-loop Zout, with
   crossover, phase margin and gain margin. Zeros, poles and gain can be dragged on the plot.
-- Op-amp error amplifier circuit with R/C values.
+- Op-amp circuits with R/C values: the error amplifier, and the current amplifier in ACMC.
 - Closed-loop switching simulation with load step, input step, reference step and
   soft-start; step-response numbers and extra scope signals (vc, ramp, duty, iref, ...).
-- PCMC with slope compensation and leading-edge blanking, subharmonic check (α, Q<sub>p</sub>).
+- PCMC with slope compensation and leading-edge blanking (pulses are skipped below the
+  minimum on-time), subharmonic check (α, Q<sub>p</sub>).
 - ACMC with a current amplifier and a voltage loop, current-loop Bode view and Dixon's
   slope check.
 - Frequency response analysis (FRA) measured on the switching simulation, drawn on the Bode
@@ -40,9 +45,10 @@ four pages:
 
 ## Getting Started
 
-Open `index.html` in a browser (works from `file://`).
+Use the [live site](https://natchpai.github.io/converter-lab.github.io/), or open `index.html` in a
+browser (works from `file://`).
 
-URL options:
+URL options (add them to the page address):
 
 | Option | Effect |
 |---|---|
@@ -100,6 +106,7 @@ converterCnotrol/
 │   └── browser.js  # headless browser tests and screenshots
 ├── checkpoint.md   # development log, test results, open items
 ├── CLAUDE.md       # notes for Claude Code
+├── LICENSE         # MIT
 └── README.md
 ```
 
@@ -115,3 +122,7 @@ converterCnotrol/
 `checkpoint.md` records the self-test and UI-test results for each development phase
 (model checks against closed forms, loop designs, closed-loop steps, FRA against the models)
 and the items still open.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
