@@ -4,7 +4,7 @@
 power stage, watch the switching waveforms on a 4-channel scope, see where the losses go and
 design the control loop.**
 
-- Live site: <https://natchpai.github.io/converter-lab.github.io/>
+- Live site: <https://natchpai.github.io/converter-lab/>
 - Source: <https://github.com/Natchpai/converter-lab.github.io>
 
 ## Overview
@@ -46,7 +46,7 @@ from a local file), with no build step and no dependencies. It has four pages:
 
 ## Getting Started
 
-Use the [live site](https://natchpai.github.io/converter-lab.github.io/), or open `index.html` in a
+Use the [live site](https://natchpai.github.io/converter-lab/), or open `index.html` in a
 browser (works from `file://`).
 
 URL options (add them to the page address):
