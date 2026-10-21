@@ -17,6 +17,8 @@ function runUiTests() {
     bad.push(...errors.map(m => 'error: ' + m));
     if (state.page === 'control') {
       for (const k of COMP_TYPES[CTL.cfg.comp.type].keys) if (!$('#cc-sl-' + k)) bad.push(`no row for ${k}`);
+      if (CTL.cfg.mode === 'acmc') for (const k of COMP_TYPES[CTL.cfg.ci.type].keys) if (!$('#ci-sl-' + k)) bad.push(`no current-amp row for ${k}`);
+      if ($('#ciBlock').hidden !== (CTL.cfg.mode !== 'acmc')) bad.push('current-loop block shown in the wrong mode');
       for (const id of ['#ctlOp', '#loopKv', '#stepKv']) if (/NaN/.test($(id).textContent)) bad.push(`NaN in ${id}`);
       for (const c of (CTL.data ? CTL.data.curves : [])) {
         let n = 0; for (let i = 0; i < c.mag.length; i++) if (!isFinite(c.mag[i]) || !isFinite(c.ph[i])) n++;
@@ -25,7 +27,8 @@ function runUiTests() {
     }
     const pass = !bad.length;
     allPass = allPass && pass;
-    out.push(`${pass ? 'PASS' : 'FAIL'} ${name} [${CTL.cfg.mode} ${CTL.cfg.comp.type}]${pass ? '' : ': ' + bad.join('; ')}`);
+    const types = CTL.cfg.mode === 'acmc' ? `${CTL.cfg.ci.type}/${CTL.cfg.comp.type}` : CTL.cfg.comp.type;
+    out.push(`${pass ? 'PASS' : 'FAIL'} ${name} [${CTL.cfg.mode} ${types}]${pass ? '' : ': ' + bad.join('; ')}`);
   };
   const types = ['P', 'I', 'PI', 'T2', 'T3', 'I', 'P'];
   step('page Control', () => click('[data-group="page"] [data-v="control"]'));
@@ -42,6 +45,18 @@ function runUiTests() {
   // buck, Vin = 12 V: 20 V cannot be reached, the page must still show finite numbers
   step('PCMC unreachable Vo* = 20 V', () => { sideSet('Vt', 20); syncRows('cs', sideDefs(), sideGet); });
   step('PCMC Vo* back to 5 V', () => { sideSet('Vt', 5); syncRows('cs', sideDefs(), sideGet); });
+  step('mode ACMC', () => click('#ctlMode [data-m="acmc"]'));
+  for (const t of types) step(`ACMC current amp ${t}`, () => click(`#ciType [data-t="${t}"]`));
+  step('ACMC current amp T2', () => click('#ciType [data-t="T2"]'));
+  for (const t of types) step(`ACMC voltage comp ${t}`, () => click(`#compType [data-t="${t}"]`));
+  step('ACMC voltage comp T2', () => click('#compType [data-t="T2"]'));
+  step('ACMC Bode current loop', () => click('#bodeLegend [data-view="inner"]'));
+  for (const v of ['boost', 'bb', 'buck']) step(`ACMC topology ${v}`, () => click(`[data-group="topo"] [data-v="${v}"]`));
+  step('ACMC DCM example', () => click('[data-preset="dcm"]'));
+  step('ACMC Bode voltage loop', () => click('#bodeLegend [data-view="outer"]'));
+  step('ACMC reset', () => click('[data-preset="reset"]'));
+  step('mode PCMC from ACMC', () => click('#ctlMode [data-m="pcmc"]'));
+  step('mode ACMC again', () => click('#ctlMode [data-m="acmc"]'));
   step('mode VMC', () => click('#ctlMode [data-m="vmc"]'));
   step('page Converter', () => click('[data-group="page"] [data-v="converter"]'));
   window.removeEventListener('error', onErr);

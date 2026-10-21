@@ -278,5 +278,56 @@ function runControlTests() {
     check(c.mt.Dfinal >= 0.15 - 1e-9 && fin > 1.05 && c.L.warn.some(w => /blanking/.test(w)),
       `PCMC blanking tb = 0.15, Vo* = 1 V (D0 ${c.L.D0.toFixed(3)}): duty ${c.mt.Dfinal.toFixed(4)} (min on-time), Vo ${fin.toFixed(3)} V above the target, warned`);
   }
+
+  // ---- average current mode
+  const acCfg = (ci, comp, Vt) => ({ ...cfgOf(comp, Vt), mode: 'acmc', Ri: 0.5, vcMax: 4, ci, fciT: 16e3 });
+  // current loop first, then the voltage loop with the current loop closed
+  const acDesign = (p, Vt, fci, fcv, ti = 'T2', tv = 'T2') => {
+    const Li = buildLoop(p, acCfg({ type: 'P', K: 1 }, { type: 'P', K: 1 }, Vt));
+    const ci = designComp(ti, Li.plantKi, fci, 60, Li.fmin).comp;
+    const Lv = buildLoop(p, acCfg(ci, { type: 'P', K: 1 }, Vt));
+    return buildLoop(p, acCfg(ci, designComp(tv, Lv.plantK, fcv, 60, Lv.fmin).comp, Vt));
+  };
+  // Gid of the one-period map (used in DCM) vs the averaged Gid (CCM)
+  for (const [topo, R, Vt] of [['buck', 10, 5], ['boost', 50, 24]]) {
+    const p = { ...base, ...lossy, topo, R }, D = solveD0(p, Vt).D;
+    const pm = periodMapVMC(p, D), av = averagedPlant({ ...p, D }, D);
+    let worst = 0;
+    for (const f of [10, 100, 1e3, 3e3, 5e3]) worst = Math.max(worst, Math.abs(Cx.db(pm.Gout[1](f)) - Cx.db(av.Gid(f))));
+    check(worst < 0.5, `period map ${topo} CCM: |Gid| vs averaged Gid worst ${worst.toFixed(3)} dB up to fs/20`);
+  }
+  // both loops hit their targets; low-frequency outer plant = Gvd/(Ri·Gid); poles agree with margins
+  for (const [name, p, Vt, fcv] of [['buck', pB, 5, 4e3], ['boost', { ...base, ...lossy, topo: 'boost', R: 50 }, 24, 2e3]]) {
+    const L = acDesign(p, Vt, 16e3, fcv);
+    const lo = rel(Cx.abs(L.Gvi(fLow)), Cx.abs(Cx.div(L.plant.Gvd(fLow), Cx.scale(L.plant.Gid(fLow), 0.5))));
+    const ok = rel(L.mi.fc, 16e3) < 0.01 && Math.abs(L.mi.pm - 60) < 0.5 && rel(L.m.fc, fcv) < 0.01 && Math.abs(L.m.pm - 60) < 0.5 && lo < 1e-3 && L.stable;
+    // raise the voltage-loop gain past its gain margin: the two-loop poles must go unstable
+    const Lx = buildLoop(p, { ...L.cfg, comp: { ...L.cfg.comp, K: L.cfg.comp.K * 10 ** (L.m.gm / 20) * 1.5 } });
+    check(ok && !Lx.stable && Lx.poles.some(r => r.re > 0),
+      `ACMC ${name}: current loop fc ${fmtSI(L.mi.fc, 'Hz')} PM ${L.mi.pm.toFixed(2)}°, voltage loop fc ${fmtSI(L.m.fc, 'Hz')} PM ${L.m.pm.toFixed(2)}° GM ${L.m.gm.toFixed(1)} dB; Gvi(0) vs Gvd/(Ri·Gid) ${pc(lo)}; gain ×1.5 past GM -> ${Lx.stable ? 'stable' : 'RHP poles'}`);
+  }
+  // closed loop: load step and step back settle, average Ri·iL follows iref
+  for (const [name, p, Vt, fcv] of [['buck', pB, 5, 4e3], ['boost', { ...base, ...lossy, topo: 'boost', R: 50 }, 24, 2e3], ['DCM buck', { ...base, topo: 'buck', R: 100 }, 7, 2e3]]) {
+    const L = acDesign(p, Vt, 16e3, fcv), sz = clSizes(L, 'auto');
+    const t0 = performance.now();
+    const res = computeResCL(L, { event: 'load', size: 100, back: true, ...sz }), ms = performance.now() - t0, mt = res.met;
+    const tA = res.tEnd - 10 * res.T, iS = statsArr(res.rec, res.sigArray('isense'), tA, res.tEnd).mean, iR = statsArr(res.rec, res.sigArray('iref'), tA, res.tEnd).mean;
+    const sA = mt.segs[1], sB = mt.segs[2];
+    const ok = rel(sA.final, Vt) < 0.005 && rel(sB.final, Vt) < 0.005 && sA.settled && sB.settled && rel(iS, iR) < 0.005 && rel(mt.Dfinal, L.D0) < 0.01;
+    check(ok, `ACMC closed loop ${name} (${L.plant.kind}): load x2 -> ${sA.final.toFixed(4)} V (dip ${fmtSI(sA.under, 'V')}), back -> ${sB.final.toFixed(4)} V, Ri·iL ${fmtSI(iS, 'V', 4)} vs iref ${fmtSI(iR, 'V', 4)}, ${sz.nPer}x${sz.N} steps ${ms.toFixed(0)} ms`);
+  }
+  // slope rule: buck at D = 0.67, current-amp gain at fs set for slope ratio 0.8 and 2.0
+  {
+    const p = { ...base, topo: 'buck' }, L0 = acDesign(p, 8, 16e3, 2e3), g0 = L0.slope.ratio;
+    const alt = ratio => {
+      const L = buildLoop(p, { ...L0.cfg, ci: { ...L0.cfg.ci, K: L0.cfg.ci.K * ratio / g0 } });
+      const sim = simulateCL(L, { event: 'load', size: 10, back: false, nPer: 300, N: 300, pre: 60 });
+      let a = 0; for (let k = sim.nPer - 20; k < sim.nPer; k++) a = Math.max(a, Math.abs(sim.duty[k] - sim.duty[k - 1]));
+      return { a, warned: L.warn.some(w => /Slope rule/.test(w)), r: L.slope.ratio };
+    };
+    const lo = alt(0.8), hi = alt(2);
+    check(lo.a < 1e-6 && !lo.warned && hi.a > 0.05 && hi.warned,
+      `ACMC slope rule, buck D 0.667: ratio ${lo.r.toFixed(2)} -> duty change between periods ${lo.a.toExponential(1)}, ratio ${hi.r.toFixed(2)} -> ${hi.a.toFixed(3)} (period-2) and warned`);
+  }
   return { allPass, lines: out };
 }

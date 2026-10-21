@@ -29,6 +29,8 @@ const CL_SIGNALS = [
   { k: 'vfb',   n: 'vfb',   u: 'V', d: 'Feedback H·|vo|' },
   { k: 'verr',  n: 'verr',  u: 'V', d: 'Error vref − H·|vo|' },
   { k: 'voavg', n: 'vo avg', u: 'V', d: 'Output voltage averaged over each period' },
+  { k: 'isense', n: 'Ri·iL', u: 'V', d: 'Sensed inductor current Ri·iL (current modes)' },
+  { k: 'iref',  n: 'iref',  u: 'V', d: 'Current reference from the voltage loop (Avg CMC), in volts of Ri·iL' },
 ];
 const SIG = Object.fromEntries([...SIGNALS, ...CL_SIGNALS].map(s => [s.k, s]));
 const CH_COLORS = ['#facc15', '#22d3ee', '#f472b6', '#4ade80'];

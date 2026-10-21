@@ -5,12 +5,16 @@
 const CTL = {
   bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'), design: $('#designBody'),
   hoverF: null, data: null, geo: null, L: null, notes: [], topoKey: null,
+  bodeView: 'outer',                      // ACMC: 'outer' voltage loop or 'inner' current loop
   show: { plant: true, gc: true, loop: true, cl: false, zcl: false },
   cfg: {
     mode: 'vmc', Vt: { buck: 5, boost: 24, bb: 12 }, Vref: VREF, Vm: 1, Dmax: 0.9, R1: 10e3,
     Ri: 0.5, mSe: 0.5, vcMax: 4, tb: 0,   // PCMC: sense gain (Ω), Se/Sf, compensator output limit (V), blanking/T
     comp: { type: 'T3', K: 1, fi: 100, fz1: 1e3, fz2: 1e3, fp1: 20e3, fp2: 50e3 },
     fcT: 10e3, pmT: 60,
+    // ACMC current amplifier and its targets
+    ci: { type: 'T2', K: 1, fi: 1e3, fz1: 4e3, fz2: 4e3, fp1: 60e3, fp2: 60e3 },
+    fciT: 16e3, pmiT: 60,
   },
   // transient test for the closed-loop switching simulation (step size per event, %)
   tr: { event: 'load', size: { load: 100, vin: 25, vref: 10, start: 0 }, back: true, nPer: 'auto' },
@@ -24,7 +28,7 @@ const CTL_SIDE = {
   tb:   { k: 'tb',   label: 'Blanking time t<sub>b</sub>/T (min on-time)', unit: '', min: 0, max: 0.3, step: 0.01 },
   Dmax: { k: 'Dmax', label: 'Max duty D<sub>max</sub>', unit: '', min: 0.5, max: 0.98, step: 0.01 },
 };
-const CTL_SIDE_KEYS = { vmc: ['Vt', 'Vm', 'Dmax'], pcmc: ['Vt', 'Ri', 'mSe', 'tb', 'Dmax'] };
+const CTL_SIDE_KEYS = { vmc: ['Vt', 'Vm', 'Dmax'], pcmc: ['Vt', 'Ri', 'mSe', 'tb', 'Dmax'], acmc: ['Vt', 'Vm', 'Ri', 'Dmax'] };
 const sideDefs = () => CTL_SIDE_KEYS[CTL.cfg.mode].map(k => CTL_SIDE[k]);
 const CTL_COMP = {
   K:   { k: 'K',   unit: '',   min: 1e-3, max: 1e4, log: true, db: true },
@@ -51,6 +55,10 @@ const COMP_FORMULA = {
 const CTL_TARGET = [
   { k: 'fcT', label: 'Target crossover f<sub>c</sub>', unit: 'Hz', min: 1, max: 5e5, log: true },
   { k: 'pmT', label: 'Target phase margin', unit: '°', min: 10, max: 85, step: 1 },
+];
+const CTL_TARGET_I = [
+  { k: 'fciT', label: 'Target current-loop crossover f<sub>ci</sub>', unit: 'Hz', min: 10, max: 5e5, log: true },
+  { k: 'pmiT', label: 'Target current-loop phase margin', unit: '°', min: 10, max: 85, step: 1 },
 ];
 const CTL_TR = [{ k: 'size', label: 'Step size s', unit: '%', min: -50, max: 200, step: 5 }];
 const CTL_OPAMP = [{ k: 'R1', label: 'Upper divider resistor R<sub>1</sub>', unit: 'Ω', min: 1e3, max: 1e6, log: true }];
@@ -98,16 +106,26 @@ const compGet = k => CTL.cfg.comp[k];
 const compSet = (k, v) => { CTL.cfg.comp[k] = v; };
 const tgtGet = k => CTL.cfg[k];
 const tgtSet = (k, v) => { CTL.cfg[k] = v; };
-function compDefs() {
-  const t = CTL.cfg.comp.type;
-  return COMP_TYPES[t].keys.map(k => ({ ...CTL_COMP[k], label: COMP_LABEL[t][k] }));
+const ciGet = k => CTL.cfg.ci[k];
+const ciSet = (k, v) => { CTL.cfg.ci[k] = v; };
+function compDefs(c = CTL.cfg.comp) {
+  return COMP_TYPES[c.type].keys.map(k => ({ ...CTL_COMP[k], label: COMP_LABEL[c.type][k] }));
 }
-function ctlCfg() { return { ...CTL.cfg, Vt: CTL.cfg.Vt[state.topo], comp: { ...CTL.cfg.comp } }; }
+function ctlCfg() { return { ...CTL.cfg, Vt: CTL.cfg.Vt[state.topo], comp: { ...CTL.cfg.comp }, ci: { ...CTL.cfg.ci } }; }
 function ctlLoop() { CTL.L = buildLoop(effParams(), ctlCfg()); return CTL.L; }
 
 // k-factor design for the current type and targets. 'suggest' also picks fc.
+// ACMC: the current loop is designed first, then the voltage loop with the current loop closed.
 function autoDesign(how) {
-  const cfg = ctlCfg(), p = effParams();
+  const cfg = ctlCfg(), p = effParams(), pre = [];
+  if (cfg.mode === 'acmc') {
+    if (how === 'suggest') CTL.cfg.fciT = suggestFci(p);
+    const Li = buildLoop(p, { ...cfg, fciT: CTL.cfg.fciT, ci: { type: 'P', K: 1 }, comp: { type: 'P', K: 1 } });
+    const di = designComp(CTL.cfg.ci.type, Li.plantKi, CTL.cfg.fciT, CTL.cfg.pmiT, Li.fmin);
+    Object.assign(CTL.cfg.ci, di.comp);
+    cfg.ci = { ...CTL.cfg.ci }; cfg.fciT = CTL.cfg.fciT;
+    pre.push(`Current loop: plant phase at f<sub>ci</sub> = ${di.phi.toFixed(1)}°.`, ...di.notes);
+  }
   const L0 = buildLoop(p, { ...cfg, comp: { type: 'P', K: 1 } });
   if (cfg.mode === 'pcmc' && !L0.plant.ok) {
     CTL.notes = ['Auto design skipped: the converter has no steady state at this target (see the warnings).'];
@@ -126,9 +144,12 @@ function autoDesign(how) {
   } else {
     const d = designComp(type, L0.plantK, fc, CTL.cfg.pmT, L0.fmin);
     Object.assign(CTL.cfg.comp, d.comp);
-    CTL.notes = [`k-factor: plant phase at fc = ${d.phi.toFixed(1)}°, boost needed = ${(CTL.cfg.pmT - d.phi - 90).toFixed(1)}°.`, ...d.notes];
+    CTL.notes = [...pre, `k-factor: plant phase at fc = ${d.phi.toFixed(1)}°, boost needed = ${(CTL.cfg.pmT - d.phi - 90).toFixed(1)}°.`, ...d.notes];
   }
-  if (CTL.built) { syncRows('ct', CTL_TARGET, tgtGet); syncRows('cc', compDefs(), compGet); }
+  if (CTL.built) {
+    syncRows('ct', CTL_TARGET, tgtGet); syncRows('cc', compDefs(), compGet);
+    syncRows('cti', CTL_TARGET_I, tgtGet); syncRows('ci', compDefs(CTL.cfg.ci), ciGet);
+  }
 }
 
 // Modulator rows on the left; they depend on the control mode.
@@ -139,14 +160,26 @@ function buildSideRows() {
   bindRows('cs', defs, sideGet, sideSet, ctlChanged);
   syncRows('cs', defs, sideGet);
   if (pc) $('#btnSeHalf').addEventListener('click', () => { CTL.cfg.mSe = 0.5; syncRows('cs', defs, sideGet); ctlChanged('mSe', true); });
-  $('#btnTextbook').hidden = pc;          // the textbook Type 3 placement is for the LC plant (VMC)
+  // mode-dependent parts of the design panel
+  const md = CTL.cfg.mode;
+  $('#btnTextbook').hidden = md !== 'vmc';  // the textbook Type 3 placement is for the LC plant (VMC)
+  $('#ciBlock').hidden = md !== 'acmc';
+  $('#compTitle').innerHTML = md === 'acmc' ? 'Voltage loop: compensator G<sub>cv</sub>' : 'Compensator';
 }
 
 function buildCompRows() {
   const t = CTL.cfg.comp.type, defs = compDefs();
-  $('#compRows').innerHTML = `<p class="note">${COMP_FORMULA[t]}</p>` + rowsHTML('cc', defs);
+  const fm = CTL.cfg.mode === 'acmc' ? COMP_FORMULA[t].replace(/G<sub>c<\/sub>/, 'G<sub>cv</sub>') : COMP_FORMULA[t];
+  $('#compRows').innerHTML = `<p class="note">${fm}</p>` + rowsHTML('cc', defs);
   bindRows('cc', defs, compGet, compSet, ctlChanged);
   syncRows('cc', defs, compGet);
+}
+// ACMC current amplifier rows (same forms as the compensator, input iref − Ri·iL).
+function buildCiRows() {
+  const t = CTL.cfg.ci.type, defs = compDefs(CTL.cfg.ci);
+  $('#ciRows').innerHTML = `<p class="note">${COMP_FORMULA[t].replace(/G<sub>c<\/sub>/, 'G<sub>ci</sub>')}</p>` + rowsHTML('ci', defs);
+  bindRows('ci', defs, ciGet, ciSet, ctlChanged);
+  syncRows('ci', defs, ciGet);
 }
 
 // A control setting changed: redraw the Bode plot now, and rerun the switching simulation
@@ -171,7 +204,7 @@ function buildControlUI() {
     <h2>Control</h2>
     <div class="ctlBlock">
       <div class="seg small" id="ctlMode" role="group" aria-label="Control mode">
-        <button data-m="vmc" title="Voltage-mode control">VMC</button><button data-m="pcmc" title="Peak current-mode control with slope compensation">Peak CMC</button><button data-m="acmc" disabled title="Average current-mode control (next phase)">Avg CMC</button>
+        <button data-m="vmc" title="Voltage-mode control">VMC</button><button data-m="pcmc" title="Peak current-mode control with slope compensation">Peak CMC</button><button data-m="acmc" title="Average current-mode control: current amplifier inside, voltage loop outside">Avg CMC</button>
       </div>
       <div id="ctlSideRows"></div>
       <div class="kv" id="ctlOp"></div>
@@ -184,7 +217,16 @@ function buildControlUI() {
       <label class="ctlInline" style="margin-left:12px">Length <select id="trLen">${['auto', 100, 200, 500, 1000, 2000, 3000].map(v => `<option value="${v}">${v === 'auto' ? 'Auto' : v + ' periods'}</option>`).join('')}</select></label>
     </div>`;
   CTL.design.innerHTML = `
-    <h3>Compensator</h3>
+    <div id="ciBlock" hidden>
+      <h3>Current loop: amplifier G<sub>ci</sub></h3>
+      <div class="seg small" id="ciType" role="group" aria-label="Current amplifier type">
+        ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
+      </div>
+      <div id="ciRows"></div>
+      ${rowsHTML('cti', CTL_TARGET_I)}
+      <p class="note">Auto design (below) designs the current loop first, then the voltage loop with the current loop closed.</p>
+    </div>
+    <h3 id="compTitle">Compensator</h3>
     <div class="seg small" id="compType" role="group" aria-label="Compensator type">
       ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
     </div>
@@ -211,7 +253,8 @@ function buildControlUI() {
     <ul class="tips" id="ctlTips"></ul>`;
   bindRows('ct', CTL_TARGET, tgtGet, tgtSet, ctlChanged);
   bindRows('co', CTL_OPAMP, k => CTL.cfg[k], (k, v) => { CTL.cfg[k] = v; }, ctlChanged);
-  syncRows('ct', CTL_TARGET, tgtGet); syncRows('co', CTL_OPAMP, k => CTL.cfg[k]);
+  bindRows('cti', CTL_TARGET_I, tgtGet, tgtSet, ctlChanged);
+  syncRows('ct', CTL_TARGET, tgtGet); syncRows('cti', CTL_TARGET_I, tgtGet); syncRows('co', CTL_OPAMP, k => CTL.cfg[k]);
   const trGet = () => CTL.tr.size[CTL.tr.event], trSet = (k, v) => { CTL.tr.size[CTL.tr.event] = v; };
   bindRows('tr', CTL_TR, trGet, trSet, (k, final) => scheduleSim(final ? 0 : 250));
   syncRows('tr', CTL_TR, trGet);
@@ -221,14 +264,21 @@ function buildControlUI() {
   updateTrUI();
   buildSideRows();
   buildCompRows();
+  buildCiRows();
   CTL.built = true;
-  // new mode: VMC starts from Type 3 (LC double pole), PCMC from Type 2 (one dominant pole)
+  // new mode: VMC starts from Type 3 (LC double pole); PCMC and the ACMC voltage loop from
+  // Type 2 (one dominant pole once the current loop is closed)
   $('#ctlMode').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.disabled || b.dataset.m === CTL.cfg.mode) return;
     CTL.cfg.mode = b.dataset.m;
-    CTL.cfg.comp.type = CTL.cfg.mode === 'pcmc' ? 'T2' : 'T3';
+    CTL.cfg.comp.type = CTL.cfg.mode === 'vmc' ? 'T3' : 'T2';
     // rows first: autoDesign syncs the rows of the new type
     buildSideRows(); buildCompRows(); autoDesign('suggest'); updateCtlSegs(); ctlChanged(null, true);
+  });
+  $('#ciType').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    CTL.cfg.ci.type = b.dataset.t;
+    buildCiRows(); autoDesign(); updateCtlSegs(); ctlChanged(null, true);
   });
   $('#compType').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -248,6 +298,10 @@ function buildControlUI() {
     const id = e.target.dataset.curve; if (!id) return;
     CTL.show[id] = e.target.checked; drawBode();
   });
+  legend.addEventListener('click', e => {
+    const b = e.target.closest('button[data-view]'); if (!b) return;
+    CTL.bodeView = b.dataset.view; renderControl();
+  });
   CTL.bode.addEventListener('pointermove', e => {
     if (!CTL.geo) return;
     const r = CTL.bode.getBoundingClientRect(), x = (e.clientX - r.left) * dpr;
@@ -266,6 +320,7 @@ function updateTrUI() {
 function updateCtlSegs() {
   document.querySelectorAll('#ctlMode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === CTL.cfg.mode)));
   document.querySelectorAll('#compType button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === CTL.cfg.comp.type)));
+  document.querySelectorAll('#ciType button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === CTL.cfg.ci.type)));
 }
 
 // Scope on the Control page: the closed-loop switching simulation with the test event.
@@ -288,21 +343,33 @@ function renderControl() {
   const L = ctlLoop(), p = L.p, met = RES.met, m = L.m;
   els.badge.textContent = met.mode;
   els.badge.className = 'badge ' + met.mode;
-  els.headVals.textContent = `Vo=${fmtSI(met.vo.mean, 'V')}  D=${met.Dfinal.toFixed(3)}  fc=${fmtSI(m.fc, 'Hz')}  PM=${isFinite(m.pm) ? m.pm.toFixed(0) + '°' : '–'}`;
+  const pc = L.cfg.mode === 'pcmc', ac = L.cfg.mode === 'acmc', pl = L.plant, pct = x => isFinite(x) ? x.toFixed(0) + '°' : '–';
+  els.headVals.textContent = `Vo=${fmtSI(met.vo.mean, 'V')}  D=${met.Dfinal.toFixed(3)}  fc=${fmtSI(m.fc, 'Hz')}  PM=${pct(m.pm)}`
+    + (ac ? `  fci=${fmtSI(L.mi.fc, 'Hz')}  PMi=${pct(L.mi.pm)}` : '');
 
-  const pc = L.cfg.mode === 'pcmc', pl = L.plant;
   const noOp = pc && !pl.ok;               // PCMC with no steady state: the plant gain is 0 or unknown
-  const defs = [
-    { id: 'plant', name: L.plantName, short: L.plantShort, color: '--s1', H: pl.Gvd },
-    { id: 'gc', name: 'Compensator Gc', short: 'Gc', color: '--s2', H: L.Gc, dash: true },
+  const inner = ac && CTL.bodeView === 'inner';
+  const defs = (inner ? [
+    { id: 'plant', name: 'Current plant Ri·Gid/VM = Ri·îL/v̂c', short: 'RiGid/VM', color: '--s1', H: L.plantKi },
+    { id: 'gc', name: 'Current amplifier Gci', short: 'Gci', color: '--s2', H: L.Gci, dash: true },
+    { id: 'loop', name: 'Current loop Ti', short: 'Ti', color: '--s3', H: L.Ti, width: 2.6 },
+    { id: 'cl', name: 'Closed current loop Ti/(1+Ti)', short: 'CLi', color: '--s4', H: f => { const t = L.Ti(f); return Cx.div(t, Cx.add(t, Cx.of(1))); } },
+  ] : [
+    { id: 'plant', name: L.plantName, short: L.plantShort, color: '--s1', H: L.plantH },
+    { id: 'gc', name: ac ? 'Voltage compensator Gcv' : 'Compensator Gc', short: ac ? 'Gcv' : 'Gc', color: '--s2', H: L.Gc, dash: true },
     { id: 'loop', name: 'Loop gain T', short: 'T', color: '--s3', H: L.T, width: 2.6 },
     { id: 'cl', name: 'Closed loop v̂o/v̂ref', short: 'CL', color: '--s4', H: L.CL },
     { id: 'zcl', name: 'Closed-loop Zout (dBΩ)', short: 'Zout', color: '--s5', H: L.Zcl },
-  ].filter(d => d.H && (!noOp || d.id === 'gc'));
+  ]).filter(d => d.H && (!noOp || d.id === 'gc'));
+  // compensator whose zeros and poles get the drag handles
+  CTL.hc = inner ? { cn: L.cni, G: L.Gci } : { cn: L.cn, G: L.Gc };
   CTL.marks = [...L.marks, { f: p.fs / 2, text: 'fs/2' }];
-  if (isFinite(m.fc)) CTL.marks.push({ f: m.fc, text: 'fc' });
+  const mm = inner ? L.mi : m;
+  if (isFinite(mm.fc)) CTL.marks.push({ f: mm.fc, text: inner ? 'fci' : 'fc' });
   CTL.data = bodeSample(L.fmin, L.fmax, defs);
-  $('#bodeLegend').innerHTML = defs.map(d =>
+  const viewSeg = ac ? `<span class="seg small" role="group" aria-label="Bode view">${[['outer', 'Voltage loop'], ['inner', 'Current loop']].map(([v, n]) =>
+    `<button data-view="${v}" aria-pressed="${CTL.bodeView === v}">${n}</button>`).join('')}</span>` : '';
+  $('#bodeLegend').innerHTML = viewSeg + defs.map(d =>
     `<label><input type="checkbox" data-curve="${d.id}" ${CTL.show[d.id] ? 'checked' : ''}><i class="${d.dash ? 'dash' : ''}" style="--c:var(${d.color});background:var(${d.color})"></i>${d.name}</label>`).join('');
   drawBode();
 
@@ -312,6 +379,11 @@ function renderControl() {
     ['Duty D (switched model)', pl.D.toFixed(4)],
     ['Sensor gain H = V<sub>ref</sub>/V<sub>o</sub>*', L.H.toFixed(4)],
     ['v<sub>c</sub> at the operating point', noOp ? '–' : fmtSI(pl.vc0, 'V', 4)],
+  ] : ac ? [
+    ['Operating duty D<sub>0</sub>', L.D0.toFixed(4)],
+    ['Sensor gain H = V<sub>ref</sub>/V<sub>o</sub>*', L.H.toFixed(4)],
+    ['Modulator gain 1/V<sub>M</sub>', `${L.Fm.toPrecision(3)} /V`],
+    ['i<sub>ref</sub> = R<sub>i</sub>·I<sub>L</sub> at the operating point', fmtSI(L.cfg.Ri * L.IL0, 'V', 4)],
   ] : [
     ['Operating duty D<sub>0</sub>', L.D0.toFixed(4)],
     ['Sensor gain H = V<sub>ref</sub>/V<sub>o</sub>*', L.H.toFixed(4)],
@@ -325,7 +397,14 @@ function renderControl() {
   ];
   for (const mk of L.marks) rows.push([mk.text.replace(/^f(.*)$/, 'f<sub>$1</sub>'), fmtSI(mk.f, 'Hz')]);
   if (pl.kind === 'ccm') rows.push(['Plant Q', pl.Q.toPrecision(3)]);
-  if (L.poles) rows.push(['Closed-loop poles', polesText(L.poles)]);
+  if (L.poles) rows.push(['Closed-loop poles' + (ac ? ' (both loops)' : ''), polesText(L.poles)]);
+  if (ac) rows.push(
+    ['Current-loop crossover f<sub>ci</sub>', fmtSI(L.mi.fc, 'Hz')],
+    ['Current-loop phase margin', isFinite(L.mi.pm) ? L.mi.pm.toFixed(1) + '°' : '–'],
+    ['Current-loop gain margin', isFinite(L.mi.gm) ? L.mi.gm.toFixed(1) + ' dB' : '∞'],
+    ['Amplified down-slope |G<sub>ci</sub>(fs)|·R<sub>i</sub>·|di<sub>L</sub>/dt|', sl(L.slope.Sf)],
+    ['Ramp slope V<sub>M</sub>·fs', sl(L.slope.Se)],
+    ['Slope ratio (Dixon: keep ≤ 1)', L.slope.ratio.toFixed(2)]);
   // slopes and poles need a steady state; without one only the averaged duty is shown
   if (pc && noOp) rows.push(['Averaged duty D<sub>0</sub>', L.D0.toFixed(4)]);
   else if (pc) rows.push(
@@ -339,7 +418,7 @@ function renderControl() {
     ['Averaged duty D<sub>0</sub> (for comparison)', L.D0.toFixed(4)]);
   $('#loopKv').innerHTML = kvHTML(rows);
   $('#loopOk').innerHTML = L.stable && !L.warn.length
-    ? `<p class="okLine">Stable, PM ${m.pm.toFixed(0)}°${isFinite(m.gm) ? `, GM ${m.gm.toFixed(0)} dB` : ''}.</p>` : '';
+    ? `<p class="okLine">Stable, PM ${m.pm.toFixed(0)}°${isFinite(m.gm) ? `, GM ${m.gm.toFixed(0)} dB` : ''}${ac ? `; current loop PM ${L.mi.pm.toFixed(0)}°` : ''}.</p>` : '';
   $('#loopWarn').innerHTML = L.warn.map(w => `<li>${w}</li>`).join('');
   $('#designNotes').innerHTML = CTL.notes.join(' ');
   renderStep(L);
@@ -390,9 +469,10 @@ function drawBode() {
   if (!CTL.data || !CTL.L) return;
   for (const c of CTL.data.curves) c.hidden = !CTL.show[c.id];
   const L = CTL.L, handles = [];
+  const hc = CTL.hc || { cn: L.cn, G: L.Gc };
   if (CTL.show.gc) {
-    for (const w of L.cn.wz) handles.push({ f: w / TWO_PI, db: Cx.db(L.Gc(w / TWO_PI)), kind: 'zero', color: '--s2' });
-    for (const w of L.cn.wp) handles.push({ f: w / TWO_PI, db: Cx.db(L.Gc(w / TWO_PI)), kind: 'pole', color: '--s2' });
+    for (const w of hc.cn.wz) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'zero', color: '--s2' });
+    for (const w of hc.cn.wp) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'pole', color: '--s2' });
   }
   CTL.geo = bodeDraw(CTL.bode, CTL.data, { markers: CTL.marks, shadeFrom: L.p.fs / 2, hoverF: CTL.hoverF, handles });
   renderBodeInfo();
@@ -406,7 +486,7 @@ function renderBodeInfo() {
       return `${c.short}: ${v.mag.toFixed(1)} dB, ${v.ph.toFixed(1)}°`;
     }).join('   ');
   } else {
-    CTL.bodeInfo.textContent = 'Move the pointer over the plot to read values.\n○ = compensator zero, × = compensator pole. ' + (CTL.L && CTL.L.cfg.mode === 'pcmc'
+    CTL.bodeInfo.textContent = 'Move the pointer over the plot to read values.\n○ = compensator zero, × = compensator pole. ' + (CTL.L && CTL.L.fmax < CTL.L.p.fs
       ? 'The sampled-data plant is plotted up to fs/2.' : 'Shaded: above fs/2 (averaged model not valid).');
   }
 }
@@ -452,7 +532,7 @@ function opampSVG(t, v) {
     }
   }
   s += w([[410, 165], [500, 165]]) + `<circle class="node" cx="470" cy="165" r="3.5"/>`;
-  s += `<text x="506" y="160">v<tspan font-size="11" dy="3">c</tspan></text><text x="506" y="182" class="val">${CTL.cfg.mode === 'pcmc' ? 'to current comparator' : 'to PWM'}</text>`;
+  s += `<text x="506" y="160">v<tspan font-size="11" dy="3">c</tspan></text><text x="506" y="182" class="val">${{ pcmc: 'to current comparator', acmc: 'to current amplifier' }[CTL.cfg.mode] || 'to PWM'}</text>`;
   // DC parts: Rbot from the inverting node to ground, Vref on the + input
   s += w([[260, 150], [260, 180]]) + svgComp('R', 260, 180, 260, 250) + `<circle class="node" cx="260" cy="150" r="3"/>`;
   s += `<text x="248" y="222" text-anchor="end">R<tspan font-size="11" dy="3">bot</tspan></text>`;
@@ -467,6 +547,7 @@ function opampSVG(t, v) {
 function ctlTips(L) {
   const t = [], type = L.cfg.comp.type, p = L.p, pl = L.plant;
   if (L.cfg.mode === 'pcmc') return pcmcTips(L);
+  if (L.cfg.mode === 'acmc') return acmcTips(L);
   t.push('T = G<sub>c</sub>·H·G<sub>vd</sub>/V<sub>M</sub>. f<sub>c</sub> is where |T| crosses 0 dB. PM = 180° + ∠T(f<sub>c</sub>). Aim for PM ≥ 45° (60° is typical).');
   t.push('The pole at the origin (integrator) makes |T| very large at low frequency, so the DC output error goes to zero.');
   if (pl.kind === 'ccm' && p.topo === 'buck' && !(p.rc > 0) && (type === 'T2' || type === 'PI'))
@@ -492,5 +573,17 @@ function pcmcTips(L) {
   if (p.topo !== 'buck' && pl.zeros.some(z => z.re > 0)) t.push('The RHP zero of boost and buck-boost is still there in current mode. Keep f<sub>c</sub> below f<sub>RHP</sub>/5.');
   t.push('Blanking t<sub>b</sub> hides the current spike at turn-on: the comparator is ignored for t<sub>b</sub> after each clock. It also sets a minimum on-time, so at very low duty V<sub>o</sub> goes above the target.');
   t.push(`v<sub>c</sub> is limited to ${fmtSI(L.cfg.vcMax, 'V')}, so the peak current is limited to about ${fmtSI(L.cfg.vcMax / L.cfg.Ri, 'A')} (cycle-by-cycle current limit). Try the soft-start event.`);
+  return t;
+}
+
+function acmcTips(L) {
+  const t = [], p = L.p;
+  t.push('Average current mode: the voltage loop sets a current reference i<sub>ref</sub>; the current amplifier G<sub>ci</sub> compares it with R<sub>i</sub>·i<sub>L</sub> and drives the PWM. Put <b>iref</b> and <b>Ri·iL</b> on the scope: the average of R<sub>i</sub>·i<sub>L</sub> follows i<sub>ref</sub>.');
+  t.push('Design the current loop first (Bode view "Current loop": T<sub>i</sub> = G<sub>ci</sub>·R<sub>i</sub>·G<sub>id</sub>/V<sub>M</sub>, f<sub>ci</sub> near fs/6), then the voltage loop with the current loop closed. The outer plant G<sub>vi</sub> then looks like one pole, so Type 2 or PI is enough.');
+  t.push('The current amplifier passes the inductor ripple to the PWM. Dixon\'s rule: the amplified down-slope |G<sub>ci</sub>(fs)|·R<sub>i</sub>·di<sub>L</sub>/dt must stay below the ramp slope V<sub>M</sub>·fs. Raise the current-amplifier gain K until the slope ratio passes about 1.5 and watch the duty alternate period by period in the switching simulation.');
+  t.push('Unlike peak current mode, the integrator in G<sub>ci</sub> makes the average current exact, so there is no peak-to-average error and no slope compensation is needed below the slope limit.');
+  if (L.plant.kind === 'pmap') t.push('In DCM the averaged model has no inductor-current state, so both G<sub>vd</sub> and G<sub>id</sub> here come from the switching model (one period linearized). They are plotted up to fs/2.');
+  if (p.topo !== 'buck' && L.marks.some(m => m.rhp)) t.push('The RHP zero of boost and buck-boost is in G<sub>vd</sub>, not in G<sub>id</sub>: the current loop can be fast, but the voltage loop must stay below f<sub>RHP</sub>/5.');
+  t.push(`i<sub>ref</sub> is limited to ${fmtSI(L.cfg.vcMax, 'V')}, so the average inductor current is limited to about ${fmtSI(L.cfg.vcMax / L.cfg.Ri, 'A')}.`);
   return t;
 }

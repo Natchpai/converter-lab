@@ -25,7 +25,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | done |
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | done |
 | 6 | Peak current-mode control | done |
-| 7 | Average current-mode control | todo |
+| 7 | Average current-mode control | done |
 | 8 | FRA from the switching sim | todo |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | todo |
 
@@ -231,8 +231,44 @@ Read-only review of Phase 6, then fixes. Plan: `~/.claude/plans/breezy-frolickin
 - Known limits: blanking has no separate pulse-skip threshold (vc is clamped at 0, so the
   duty never drops below tb).
 
+### Phase 7: average current-mode control
+Structure: iref = Gcv·(Vref − H·|vo|) (limited to 0..vcMax), vc = Gci·(iref − Ri·iL)
+(limited to 0..1.25·VM), trailing-edge PWM as in VMC.
+- `plant.js`: `averagedPlant` also returns `polyI` (Gid = num/den); `ilSlopes(af, X)` and
+  `slopePoint(p, af, D0, Vt)` (shared with PCMC, same numbers as before).
+- `simcl.js`: `linearizePeriod` returns `Gout[j]` for every output (G = first one);
+  `periodMapVMC` also outputs the period-average iL (`Gout[1]` = Gid). `acmcPlant`: averaged
+  model in CCM; in DCM (reduced order has no iL state) `kind: 'pmap'`, Gvd and Gid from the
+  period map, plotted to fs/2 (cached). `simulateCL` ACMC branch: second compensator
+  `compI`, both advanced and redone together at switching instants; new recorded signal
+  `iref`; `sigArray('isense')` = Ri·iL.
+- `loop.js` ACMC: `L.cni/Gci`, `plantKi = Ri·Gid/VM`, `Ti`, `Gvi = (Gci·Gvd/VM)/(1 + Ti)`,
+  `plantK = H·Gvi`, `L.mi` (current-loop margins). CCM poles of both loops:
+  Dci·Dcv·Dp + Fm·Nci·(H·Ncv·Nv + Ri·Ni·Dcv) = 0; DCM: margins of both loops. Slope check
+  `L.slope` (Dixon: |Gci(fs)|·Ri·|diL/dt|off vs VM·fs), warnings for the current loop, slope
+  ratio > 1, and fc above fci/2. `suggestFc` keeps fc ≤ fciT/4; `suggestFci` = fs/6.
+- UI: Avg CMC button; side rows Vt, VM, Ri, Dmax; design block "Current loop: amplifier Gci"
+  (type, rows, fci/PM targets), "Voltage loop: compensator Gcv". Auto design does the current
+  loop first, then the voltage loop. Bode view toggle Voltage loop / Current loop (handles
+  follow the shown compensator). Readouts: iref at the operating point, fci, PMi, GMi, slope
+  numbers. ACMC tips; op-amp output "to current amplifier"; `?mode=acmc`.
+- Scope signals: `isense` (Ri·iL), `iref`.
+- Finding: a PCMC-style ripple pole estimate (sense gain |Gci(fs)|·Ri, Se = VM·fs) was far too
+  optimistic (|α| = 1 only at slope ratio 4.5), while the switching sim shows period-2 duty
+  alternation from ratio 1.2-1.6 (buck D 0.67), 1.5-2.0 (buck D 0.42), 1.8-2.4 (boost D 0.5).
+  So only Dixon's ratio is shown and warned. Dixon's rule itself is still not text-confirmed.
+- Tests (VERIFIED, Node 70 PASS = Chrome, old 62 lines unchanged; UI test 55 steps PASS incl.
+  every Gci and Gcv type, Bode view toggle, topologies, DCM, mode switches):
+  period-map Gid vs averaged Gid ≤ 0.072 dB up to fs/20 (buck, boost); buck and boost: both
+  loops hit fc and PM (1 %, 0.5°), Gvi(0) = Gvd/(Ri·Gid), outer gain ×1.5 past GM gives RHP
+  poles; closed loop buck, boost and DCM buck: load ×2 and back settle within 0.5 %, average
+  Ri·iL = iref within 0.5 %, duty = D0; slope rule buck D 0.667: ratio 0.8 no alternation and
+  no warning, ratio 2.0 duty alternates by 0.47 and warned.
+- Screenshots checked: ACMC buck dark (voltage loop) and light (current loop) at 1400 px.
+  NOT_VERIFIED: ACMC at phone width (layout uses the same blocks as the other modes).
+- Not done: closed-loop Zout for ACMC (curve hidden), op-amp values of the current amplifier.
+
 ## Next step
 
-Phase 7, average current-mode control (plan section 2 "ACMC" and the Phase 7 check row):
-two compensators (Gci inner, Gcv outer), inner/outer Bode toggle, slope-rule warning.
+Phase 8, FRA from the switching simulation (plan section 6 and the Phase 8 check row).
 `node tests/browser.js selftest` uses Chrome while Edge's `--dump-dom` is broken.

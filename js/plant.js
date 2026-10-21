@@ -86,7 +86,20 @@ function averagedPlant(p, D, af = ccmAffine(p)) {
     Zout: f => Cx.scale(zx(f), -1),   // vo per amp drawn from the output
     zeros: ssZeros(A, Bd, dc.c, Ed),
     poly: ssPoly(A, Bd, dc.c, Ed),          // Gvd = num/den
+    polyI: ssPoly(A, Bd, ci, 0),            // Gid = num/den (same den)
   };
+}
+
+// Inductor current slopes (A/s) at state X = [iL, vC]: on = A_on·X + b_on, off = −(A_off·X + b_off).
+function ilSlopes(af, X) {
+  const sl = a => a.A[0][0] * X[0] + a.A[0][1] * X[1] + a.b[0];
+  return { on: sl(af.on), off: -sl(af.off) };
+}
+// Point for the slopes at the target output: vC = ±Vt (vC = Vo at DC); iL = averaged current
+// (CCM) or half the peak (DCM). In DCM the CCM averaged point at the DCM duty is wrong.
+function slopePoint(p, af, D0, Vt) {
+  const dc = averagedDC(af, D0), th = theory({ ...p, D: D0 });
+  return [!p.sync && th.dcm ? th.Ipk / 2 : Math.max(dc.X[0], 0), (dc.X[1] < 0 ? -1 : 1) * Vt];
 }
 
 // DCM reduced-order plant (ideal parts, one pole). Derived from the averaged diode
