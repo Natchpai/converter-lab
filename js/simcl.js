@@ -69,12 +69,21 @@ const CL_EVENTS = {
 };
 
 // Run the closed-loop converter. L from buildLoop(). opt: { event, size, back, nPer, N, pre },
-// optional x0 = [iL, vC] and vc0 to start from a given state (used by the period map).
+// optional x0 = [iL, vC] and vc0 to start from a given state (used by the period map),
+// noRec (no waveform recording), inj (frequency response, see fra.js).
 // Turn-off rule: VMC   vc ≤ VM·(t − tclk)/T            (trailing-edge PWM)
 //                PCMC  vc ≤ Ri·iL + Se·(t − tclk)       (peak current with slope compensation),
 //                      ignored for the blanking time cfg.tb·T after the clock (min on-time)
 //                ACMC  as VMC, with vc = Gci·(iref − Ri·iL) and iref = Gcv·(vref − H·|vo|)
 function simulateCL(L, opt) {
+  const g = simulateCLSteps(L, opt);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+// Same run as a generator: with opt.yieldEvery it pauses every that many periods, so the page
+// can split a long run (FRA) into short slices.
+function* simulateCLSteps(L, opt) {
   const p = L.p, T = 1 / p.fs, cfg = L.cfg, Vm = cfg.Vm, H = L.H;
   const pc = cfg.mode === 'pcmc', ac = cfg.mode === 'acmc', Ri = cfg.Ri, Se = L.Se || 0;
   const s = opt.size / 100, ev = opt.event;
@@ -98,11 +107,30 @@ function simulateCL(L, opt) {
   const comp = opt.vcLim ? makeCompSim(L.cn, -opt.vcLim, opt.vcLim) : makeCompSim(L.cn, 0, pc || ac ? cfg.vcMax : 1.25 * Vm);
   const compI = ac ? makeCompSim(L.cni, 0, 1.25 * Vm) : null;
   const snap = new Float64Array(comp.S.length), snapI = ac ? new Float64Array(compI.S.length) : null;
-  const vcNow = ac ? () => compI.y() : () => comp.y();
+  // FRA injection: a sine added at the modulator input (inj.at 'vc') or, in ACMC, to the
+  // current reference ('iref'); inj.freeze holds the voltage compensator (current loop alone).
+  // x = signal after the injection point, y = compensator output before it.
+  const inj = opt.inj, injVc = !!inj && inj.at === 'vc', injIr = !!inj && inj.at === 'iref';
+  const wI = inj ? TWO_PI * inj.f : 0, vinj = t => inj.amp * Math.sin(wI * t), freeze = !!inj && !!inj.freeze;
+  const vcBase = ac ? () => compI.y() : () => comp.y();
+  const vcNow = injVc ? t => vcBase() + vinj(t) : () => vcBase();
+  const irAt = injIr ? t => comp.y() + vinj(t) : () => comp.y();       // iref seen by the current amp
   // advance the compensators over hh; u0, e0 = inputs at the step start, (a1, b1) = state at the end
   const advance = (hh, t1, st1, u0, e0, a1, b1) => {
-    comp.step(u0, u(t1, st1, a1, b1), hh);
-    if (ac) compI.step(e0, comp.y() - Ri * a1, hh);
+    if (!freeze) comp.step(u0, u(t1, st1, a1, b1), hh);
+    if (ac) compI.step(e0, irAt(t1) - Ri * a1, hh);
+  };
+  // DFT sums (trapezoid on the step grid) of x, y, |vo| and iL over the periods k ≥ inj.k0
+  const fra = inj ? { X: Cx.of(0), Y: Cx.of(0), V: Cx.of(0), I: Cx.of(0) } : null;
+  const xOf = t => injVc ? vcNow(t) : irAt(t), yOf = () => injVc ? vcBase() : comp.y();
+  const acc = (tA, tB, s0, s1) => {               // s = [x, y, vo, iL] at tA and tB
+    const h = tB - tA, cA = Math.cos(wI * tA), sA = Math.sin(wI * tA), cB = Math.cos(wI * tB), sB = Math.sin(wI * tB);
+    const keys = ['X', 'Y', 'V', 'I'];
+    for (let q = 0; q < 4; q++) {
+      const z = fra[keys[q]];
+      z.re += 0.5 * h * (s0[q] * cA + s1[q] * cB);
+      z.im -= 0.5 * h * (s0[q] * sA + s1[q] * sB);
+    }
   };
   let u = null;                                     // error input of the voltage loop, set per period
   let iL, vC;
@@ -116,7 +144,7 @@ function simulateCL(L, opt) {
     comp.init(pc ? L.vc0 : ac ? Ri * L.IL0 : L.D0 * Vm);
     if (ac) compI.init(L.D0 * Vm);
   }
-  const rec = makeRecCL((nPer + 2) * (N + 6) + 64);
+  const rec = makeRecCL(opt.noRec ? 64 : (nPer + 2) * (N + 6) + 64);
   const duty = new Float64Array(pre + nPer);
   const sync = p.sync, tPre = pre * T;
   let st = ON;
@@ -124,12 +152,12 @@ function simulateCL(L, opt) {
   for (let k = 0; k < pre + nPer; k++) {
     const seg = segAt(k), m = models[seg], tclk = k * T, tMax = tclk + cfg.Dmax * T;
     const tB = tclk + (pc ? cfg.tb || 0 : 0) * T;                     // end of leading-edge blanking
-    const recOn = k >= pre, i0 = rec.n;
+    const recOn = !opt.noRec && k >= pre, i0 = rec.n, meas = !!inj && k >= inj.k0;
     const ramp = pc ? (t, i) => Ri * i + Se * (t - tclk) : t => Vm * (t - tclk) / T;
     u = (t, sst, a, b) => vrefAt(t) - H * m.vout(sst, a, b);
-    const push = tt => pushCL(rec, tt - tPre, iL, vC, st, seg, vcNow(), ramp(tt, iL), vrefAt(tt), ac ? comp.y() : 0);
+    const push = tt => pushCL(rec, tt - tPre, iL, vC, st, seg, vcNow(tt), ramp(tt, iL), vrefAt(tt), ac ? comp.y() : 0);
     // clock edge: S turns on (VMC: unless vc is below the ramp start; PCMC: it may turn off at once)
-    st = pc || vcNow() > 0 ? ON : (st === ON ? OFF : st);
+    st = pc || vcNow(tclk) > 0 ? ON : (st === ON ? OFF : st);
     if (st !== ON && !sync && iL <= 0) { iL = 0; st = m.offRises(vC) ? OFF : IDLE; }
     let dk = st === ON ? NaN : 0;
     if (recOn) push(tclk);
@@ -139,14 +167,15 @@ function simulateCL(L, opt) {
         if (st === IDLE && m.offRises(vC)) { st = OFF; if (recOn) push(t); }
         // while blanked, end the step at tB so the comparator starts exactly there
         const blank = st === ON && t < tB - 1e-12 * T, hs = blank && t + rem > tB ? tB - t : rem;
-        const u0 = u(t, st, iL, vC), vc0 = vcNow(), e0 = ac ? comp.y() - Ri * iL : 0;
+        const u0 = u(t, st, iL, vC), vc0 = vcNow(t), e0 = ac ? irAt(t) - Ri * iL : 0;
+        const s0 = meas ? [xOf(t), yOf(), m.vout(st, iL, vC), iL] : null;
         comp.save(snap); if (ac) compI.save(snapI);
         m.step(st, iL, vC, hs);
         let iL1 = m.ni, vC1 = m.nv;
         advance(hs, t + hs, st, u0, e0, iL1, vC1);
         let h1 = hs, next = st;
         if (st === ON) {
-          const g0 = ramp(t, iL) - vc0, g1 = ramp(t + hs, iL1) - vcNow();
+          const g0 = ramp(t, iL) - vc0, g1 = ramp(t + hs, iL1) - vcNow(t + hs);
           let tc = Infinity;
           if (g1 >= 0 && !blank) tc = t + hs * clamp(g0 < 0 ? g0 / (g0 - g1) : 0, 0, 1);
           tc = Math.min(tc, tMax);
@@ -162,7 +191,9 @@ function simulateCL(L, opt) {
           } else { iL1 = iL; vC1 = vC; }
           if (next === IDLE) iL1 = 0;
         }
-        iL = iL1; vC = vC1; t += h1; rem -= h1;
+        iL = iL1; vC = vC1;
+        if (meas && h1 > 0) acc(t, t + h1, s0, [xOf(t + h1), yOf(), m.vout(st, iL, vC), iL]);
+        t += h1; rem -= h1;
         if (recOn) push(t);
         if (next !== st) {
           if (st === ON) dk = (t - tclk) / T;
@@ -177,8 +208,9 @@ function simulateCL(L, opt) {
     if (recOn) rec.x.duty.fill(dk, i0, rec.n);
     // the next clock edge starts from ON in the state machine above
     if (st === ON) st = OFF;
+    if (opt.yieldEvery && (k + 1) % opt.yieldEvery === 0) yield k + 1;
   }
-  return { rec, models, nPer, N, T, tEnd: nPer * T, kEv, kBack, duty: duty.subarray(pre), pre };
+  return { rec, models, nPer, N, T, tEnd: nPer * T, kEv, kBack, duty: duty.subarray(pre), pre, fra };
 }
 
 /* ---------- result object for the scope ---------- */

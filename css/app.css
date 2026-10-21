@@ -176,6 +176,8 @@ body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { 
 .bodeLegend label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--ink); }
 .bodeLegend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
 .bodeLegend i.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px) !important; }
+.fraBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.fraMsg { font-size: 14px; color: var(--muted); }
 #bodeInfo { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 2.9em; white-space: pre-wrap; }
 @media (min-width: 1251px) {
   body[data-page="control"] main.layout { grid-template-columns: 310px minmax(0, 1.4fr) minmax(0, 1fr); }

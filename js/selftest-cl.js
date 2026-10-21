@@ -329,5 +329,33 @@ function runControlTests() {
     check(lo.a < 1e-6 && !lo.warned && hi.a > 0.05 && hi.warned,
       `ACMC slope rule, buck D 0.667: ratio ${lo.r.toFixed(2)} -> duty change between periods ${lo.a.toExponential(1)}, ratio ${hi.r.toFixed(2)} -> ${hi.a.toFixed(3)} (period-2) and warned`);
   }
+
+  // ---- FRA on the switching simulation vs the models
+  const fraCase = (name, L, view, freqs, dbMax, degMax, extra) => {
+    const S = fraSetup(L, view);
+    let wDb = 0, wDeg = 0, ms = 0, cons = 0;
+    for (const f of freqs) {
+      const r = fraPoint(L, f, { view });
+      ms += r.ms;
+      wDb = Math.max(wDb, Math.abs(Cx.db(r.T) - Cx.db(S.T(r.f))), Math.abs(Cx.db(r.P) - Cx.db(S.P(r.f))));
+      wDeg = Math.max(wDeg, Math.abs(wrap180(Cx.deg(r.T) - Cx.deg(S.T(r.f)))), Math.abs(wrap180(Cx.deg(r.P) - Cx.deg(S.P(r.f)))));
+      if (extra) cons = Math.max(cons, extra(r));
+    }
+    const ok = wDb < dbMax && wDeg < degMax && (!extra || cons < 0.01);
+    check(ok, `FRA ${name}: ${freqs.length} points ${freqs.map(f => fmtSI(f, 'Hz', 2)).join(', ')}: worst ${wDb.toFixed(2)} dB, ${wDeg.toFixed(1)}° vs the model (limit ${dbMax} dB, ${degMax}°)${extra ? `, T vs Gc·H·plant/VM ${pc(cons)}` : ''}, ${ms.toFixed(0)} ms`);
+  };
+  {
+    const L0 = buildLoop(pB, cfgOf({ type: 'P', K: 1 }, 5));
+    const L = buildLoop(pB, cfgOf(designComp('T3', L0.plantK, 10e3, 60, L0.fmin).comp, 5));
+    // the compensator is known exactly, so the measured T must equal Gc·H·(measured Gvd)/VM
+    const tCons = r => Cx.abs(Cx.sub(Cx.div(r.T, Cx.scale(Cx.mul(L.Gc(r.f), r.P), L.H * L.Fm)), Cx.of(1)));
+    fraCase('VMC buck CCM', L, 'outer', [1e3, 3e3, 6e3, 1e4], 1, 5, tCons);
+    const pD = { ...base, topo: 'buck', R: 100 }, LD0 = buildLoop(pD, cfgOf({ type: 'P', K: 1 }, 7));
+    fraCase('VMC buck DCM', buildLoop(pD, cfgOf(designComp('PI', LD0.plantK, 1e3, 60, LD0.fmin).comp, 7)), 'outer', [1e3, 4e3, 8e3], 2, 5);
+    fraCase('PCMC buck', pcDesign(pB, 5, 0.5, 10e3, 60), 'outer', [1e3, 4e3, 1e4], 0.5, 3);
+    const LA = acDesign(pB, 5, 16e3, 4e3);
+    fraCase('ACMC buck voltage loop', LA, 'outer', [1e3, 4e3, 8e3], 1, 5);
+    fraCase('ACMC buck current loop', LA, 'inner', [2e3, 8e3, 1.6e4], 1.5, 5);
+  }
   return { allPass, lines: out };
 }

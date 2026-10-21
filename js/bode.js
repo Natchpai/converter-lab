@@ -46,7 +46,8 @@ function decadeLabel(f) {
   return String(+f.toPrecision(1));
 }
 
-// opt: { markers: [{ f, text }], shadeFrom, hoverF, handles: [{ f, db, kind: 'zero'|'pole'|'gain', color }] }
+// opt: { markers: [{ f, text }], shadeFrom, hoverF, handles: [{ f, db, kind: 'zero'|'pole'|'gain', color }],
+//        dots: [{ f, mag, ph, color }] (measured points, drawn as squares) }
 function bodeDraw(cv, data, opt = {}) {
   const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, k = dpr;
   const cs = getComputedStyle(document.documentElement), tok = n => cs.getPropertyValue(n).trim();
@@ -147,6 +148,17 @@ function bodeDraw(cv, data, opt = {}) {
     ctx.strokeStyle = tok(c.color); ctx.lineWidth = 3 * k;
     ctx.beginPath(); ctx.moveTo(ml + pw + 4 * k, y); ctx.lineTo(ml + pw + 14 * k, y); ctx.stroke();
     ctx.fillStyle = ink; ctx.fillText(c.short || c.name, ml + pw + 17 * k, y);
+  }
+
+  // measured points (FRA)
+  for (const d of opt.dots || []) {
+    if (d.f < data.fmin || d.f > data.fmax) continue;
+    const x = X(d.f), r = 4 * k;
+    ctx.fillStyle = tok(d.color); ctx.strokeStyle = ink; ctx.lineWidth = 1.2 * k;
+    for (const [v, Y, y0, h] of [[d.mag, YM, yM0, hM], [d.ph, YP, yP0, hP]]) {
+      const y = Y(v); if (!isFinite(y) || y < y0 || y > y0 + h) continue;
+      ctx.fillRect(x - r, y - r, 2 * r, 2 * r); ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
+    }
   }
 
   // drag handles (zeros ○, poles ×, gain ◆)

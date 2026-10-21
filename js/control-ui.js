@@ -6,6 +6,7 @@ const CTL = {
   bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'), design: $('#designBody'),
   hoverF: null, data: null, geo: null, L: null, notes: [], topoKey: null,
   bodeView: 'outer',                      // ACMC: 'outer' voltage loop or 'inner' current loop
+  fra: null, curKey: '',                  // last FRA run and the settings it belongs to
   show: { plant: true, gc: true, loop: true, cl: false, zcl: false },
   cfg: {
     mode: 'vmc', Vt: { buck: 5, boost: 24, bb: 12 }, Vref: VREF, Vm: 1, Dmax: 0.9, R1: 10e3,
@@ -309,6 +310,7 @@ function buildControlUI() {
     drawBode();
   });
   CTL.bode.addEventListener('pointerleave', () => { CTL.hoverF = null; drawBode(); });
+  buildFraBar();
   updateCtlSegs();
 }
 function updateTrUI() {
@@ -341,6 +343,8 @@ function computeControl() {
 /* ---------- render ---------- */
 function renderControl() {
   const L = ctlLoop(), p = L.p, met = RES.met, m = L.m;
+  CTL.curKey = fraKey();
+  if (CTL.fra && CTL.fra.running && CTL.fra.key !== CTL.curKey) fraStop('Settings changed: measurement stopped.');
   els.badge.textContent = met.mode;
   els.badge.className = 'badge ' + met.mode;
   const pc = L.cfg.mode === 'pcmc', ac = L.cfg.mode === 'acmc', pl = L.plant, pct = x => isFinite(x) ? x.toFixed(0) + '°' : '–';
@@ -423,7 +427,8 @@ function renderControl() {
   $('#designNotes').innerHTML = CTL.notes.join(' ');
   renderStep(L);
   renderOpamp(L);
-  $('#ctlTips').innerHTML = ctlTips(L).map(t => `<li>${t}</li>`).join('');
+  $('#ctlTips').innerHTML = [...ctlTips(L), FRA_TIP].map(t => `<li>${t}</li>`).join('');
+  fraUI();
 }
 function renderControlLive() { /* cursor-dependent control readouts go here */ }
 
@@ -474,7 +479,7 @@ function drawBode() {
     for (const w of hc.cn.wz) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'zero', color: '--s2' });
     for (const w of hc.cn.wp) handles.push({ f: w / TWO_PI, db: Cx.db(hc.G(w / TWO_PI)), kind: 'pole', color: '--s2' });
   }
-  CTL.geo = bodeDraw(CTL.bode, CTL.data, { markers: CTL.marks, shadeFrom: L.p.fs / 2, hoverF: CTL.hoverF, handles });
+  CTL.geo = bodeDraw(CTL.bode, CTL.data, { markers: CTL.marks, shadeFrom: L.p.fs / 2, hoverF: CTL.hoverF, handles, dots: fraDots() });
   renderBodeInfo();
 }
 
@@ -484,7 +489,7 @@ function renderBodeInfo() {
     CTL.bodeInfo.textContent = `f = ${fmtHz(CTL.hoverF)}\n` + CTL.data.curves.filter(c => !c.hidden).map(c => {
       const v = bodeAt(CTL.data, c, CTL.hoverF);
       return `${c.short}: ${v.mag.toFixed(1)} dB, ${v.ph.toFixed(1)}°`;
-    }).join('   ');
+    }).join('   ') + fraHoverText(CTL.hoverF);
   } else {
     CTL.bodeInfo.textContent = 'Move the pointer over the plot to read values.\n○ = compensator zero, × = compensator pole. ' + (CTL.L && CTL.L.fmax < CTL.L.p.fs
       ? 'The sampled-data plant is plotted up to fs/2.' : 'Shaded: above fs/2 (averaged model not valid).');
@@ -586,4 +591,75 @@ function acmcTips(L) {
   if (p.topo !== 'buck' && L.marks.some(m => m.rhp)) t.push('The RHP zero of boost and buck-boost is in G<sub>vd</sub>, not in G<sub>id</sub>: the current loop can be fast, but the voltage loop must stay below f<sub>RHP</sub>/5.');
   t.push(`i<sub>ref</sub> is limited to ${fmtSI(L.cfg.vcMax, 'V')}, so the average inductor current is limited to about ${fmtSI(L.cfg.vcMax / L.cfg.Ri, 'A')}.`);
   return t;
+}
+
+/* ---------- FRA: frequency response measured on the switching simulation ---------- */
+const FRA_TIP = '<b>Measure with FRA</b> (under the Bode plot) injects a small sine into the switching simulation at each test frequency, like a network analyzer on the bench, and draws the measured T and plant as squares. Below about fs/5 they sit on the curves. Above it the averaged curves are no longer exact. In VMC CCM the measured gain is a few tenths of a dB lower even at low frequency; the likely cause is the ripple on v<sub>c</sub> at the PWM comparator, which the averaged model leaves out.';
+const fraKey = () => JSON.stringify([effParams(), ctlCfg(), CTL.bodeView]);
+
+function buildFraBar() {
+  const bar = document.createElement('div');
+  bar.className = 'fraBar'; bar.id = 'fraBar';
+  bar.innerHTML = `<button class="btn" id="fraRun" title="Inject a small sine into the switching simulation at each frequency and measure T and the plant">Measure with FRA</button>
+    <label class="ctlInline">Points <select id="fraN">${[8, 15, 25].map(n => `<option value="${n}"${n === 15 ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+    <button class="btn" id="fraCancel" hidden>Cancel</button><span class="fraMsg" id="fraMsg"></span>`;
+  CTL.bodeInfo.after(bar);
+  $('#fraRun').addEventListener('click', fraStart);
+  $('#fraCancel').addEventListener('click', () => fraStop('Cancelled.'));
+}
+
+// Runs one test frequency after the other in slices of about 30 ms, so the page stays live.
+// run.step(ms) does one slice; the UI test calls it directly.
+function fraStart() {
+  fraStop();
+  const L = ctlLoop(), view = CTL.bodeView, freqs = fraFreqs(L, view, +$('#fraN').value);
+  const run = CTL.fra = { key: fraKey(), view, pts: [], running: true, total: freqs.length, t0: performance.now(), msg: '' };
+  let gen = null, i = 0;
+  run.step = (ms = 30) => {
+    const t0 = performance.now();
+    while (run.running && performance.now() - t0 < ms) {
+      if (!gen) {
+        if (i >= freqs.length) { run.running = false; run.t1 = performance.now(); break; }
+        gen = fraPointSteps(L, freqs[i], { view });
+      }
+      const r = gen.next();
+      if (r.done) { run.pts.push(r.value); gen = null; i++; drawBode(); }
+    }
+    fraUI();
+  };
+  const tick = () => { if (CTL.fra === run && run.running) { run.step(); setTimeout(tick, 0); } };
+  fraUI(); setTimeout(tick, 0);
+}
+function fraStop(msg) {
+  if (CTL.fra && CTL.fra.running) { CTL.fra.running = false; CTL.fra.t1 = performance.now(); CTL.fra.msg = msg || ''; }
+  fraUI();
+}
+function fraUI() {
+  const f = CTL.fra, el = $('#fraMsg');
+  if (!el) return;
+  $('#fraCancel').hidden = !(f && f.running); $('#fraRun').disabled = !!(f && f.running);
+  if (!f) { el.textContent = 'Not measured yet.'; return; }
+  const n = f.pts.length;
+  if (f.running) el.textContent = `Measuring point ${n + 1} of ${f.total}…`;
+  else if (f.key !== CTL.curKey) el.textContent = n ? 'Settings changed since the measurement: run it again.' : f.msg;
+  else el.textContent = (f.msg ? f.msg + ' ' : '') + `${n} points measured in ${((f.t1 - f.t0) / 1000).toFixed(1)} s (squares).`;
+}
+// Measured points of the shown loop as squares on the matching curves (phase unwrapped to them).
+function fraDots() {
+  const f = CTL.fra, out = [];
+  if (!f || f.key !== CTL.curKey || !CTL.data) return out;
+  for (const pt of f.pts) for (const [id, H] of [['loop', pt.T], ['plant', pt.P]]) {
+    const c = CTL.data.curves.find(c => c.id === id && !c.hidden); if (!c) continue;
+    let ph = Cx.deg(H); const ref = bodeAt(CTL.data, c, pt.f).ph;
+    ph += 360 * Math.round((ref - ph) / 360);
+    out.push({ f: pt.f, mag: Cx.db(H), ph, color: c.color });
+  }
+  return out;
+}
+function fraHoverText(fh) {
+  const f = CTL.fra;
+  if (!f || f.key !== CTL.curKey || !f.pts.length) return '';
+  const pt = f.pts.reduce((a, b) => Math.abs(Math.log(b.f / fh)) < Math.abs(Math.log(a.f / fh)) ? b : a);
+  if (Math.abs(Math.log(pt.f / fh)) > 0.05) return '';
+  return `\nFRA at ${fmtHz(pt.f)}: T ${Cx.db(pt.T).toFixed(1)} dB, ${Cx.deg(pt.T).toFixed(1)}°   plant ${Cx.db(pt.P).toFixed(1)} dB, ${Cx.deg(pt.P).toFixed(1)}°`;
 }

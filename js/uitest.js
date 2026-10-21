@@ -58,6 +58,16 @@ function runUiTests() {
   step('mode PCMC from ACMC', () => click('#ctlMode [data-m="pcmc"]'));
   step('mode ACMC again', () => click('#ctlMode [data-m="acmc"]'));
   step('mode VMC', () => click('#ctlMode [data-m="vmc"]'));
+  step('FRA 8 points (VMC)', () => {
+    $('#fraN').value = '8'; click('#fraRun');
+    while (CTL.fra.running) CTL.fra.step(1e9);
+    const d = fraDots();
+    if (CTL.fra.pts.length !== CTL.fra.total || d.length !== 2 * CTL.fra.total || d.some(x => !isFinite(x.mag) || !isFinite(x.ph))) throw new Error(`FRA gave ${CTL.fra.pts.length}/${CTL.fra.total} points, ${d.length} dots`);
+  });
+  step('FRA stale after a change', () => {
+    click('#compType [data-t="T2"]'); compute(); renderAll();
+    if (fraDots().length) throw new Error('old FRA points still drawn');
+  });
   step('page Converter', () => click('[data-group="page"] [data-v="converter"]'));
   window.removeEventListener('error', onErr);
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');

@@ -26,7 +26,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | done |
 | 6 | Peak current-mode control | done |
 | 7 | Average current-mode control | done |
-| 8 | FRA from the switching sim | todo |
+| 8 | FRA from the switching sim | done |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | todo |
 
 ## Log
@@ -268,7 +268,43 @@ Structure: iref = Gcv·(Vref − H·|vo|) (limited to 0..vcMax), vc = Gci·(iref
   NOT_VERIFIED: ACMC at phone width (layout uses the same blocks as the other modes).
 - Not done: closed-loop Zout for ACMC (curve hidden), op-amp values of the current amplifier.
 
+### Phase 8: FRA from the switching simulation
+- `simulateCL`: `opt.inj = { f, amp, at: 'vc'|'iref', freeze, k0 }` adds a sine at the
+  modulator input (or, ACMC, to iref; `freeze` holds the voltage compensator to measure the
+  current loop alone) and keeps trapezoid DFT sums of x, y, |vo|, iL over periods ≥ k0
+  (`sim.fra`). `opt.noRec` skips recording. `simulateCLSteps` is the same run as a generator
+  (`yieldEvery` periods); `simulateCL` drains it (same run times as before).
+- `js/fra.js` (pure, in the Node bundle): `fraSnap` (f = fs/k), `fraSetup` (injection point,
+  model T and plant for the view), `fraPoint` / `fraPointSteps`: settle max(2 cycles, 8·fs/fc
+  periods), measure 2 cycles, amplitude ~2 % of the operating compensator output but limited
+  so y stays off its clamps, and a second run without the sine is subtracted. T = −Y/X,
+  plant as plotted (VMC VM·V/X, PCMC V/X, ACMC voltage loop V/X, current loop Ri·I/X).
+  `fraFreqs`: n points from max(fc/20, fs/2000) to fs/2, no repeated k.
+- UI: bar under the Bode plot (Measure with FRA, 8/15/25 points, cancel, progress); runs in
+  30 ms slices (`run.step`), squares on the T and plant curves (phase unwrapped to the
+  curve), hover readout of the nearest point; points hidden and a run stopped when the
+  settings change (`CTL.curKey`). FRA tip in all modes.
+- Results (VERIFIED, Node 75 PASS = Chrome, earlier 70 lines unchanged; UI test with an
+  8-point run and the stale check, ALL PASS):
+  VMC buck CCM 1-10 kHz within 0.69 dB / 0.6° (plan: 1 dB, 5°), and measured T equals
+  Gc·H·(measured plant)/VM within 0.008 %; VMC buck DCM (reduced-order model) up to 8 kHz
+  within 0.02 dB / 4.2° (plan: 2 dB); PCMC buck vs period map up to 10 kHz within 0.22 dB /
+  2.6°; ACMC voltage loop up to 8 kHz within 0.17 dB / 3.7°; ACMC current loop within 1.07 dB.
+  At exactly fs/10 the phase error reaches 5.1-5.5° (PWM delay, not in the averaged models),
+  so the 5° checks use points below fs/10 as the plan says. Above fs/5 all modes depart
+  from the curves (PCMC: the period map holds vc over each period, the FRA sine does not).
+- Constant gain offset in closed loop (VMC CCM −0.41 to −0.69 dB, ACMC current loop
+  −1.05 dB, VMC DCM −0.01 dB). Open loop (compensator held) at 300 Hz matches the averaged
+  Gvd to 0.000 dB, so it comes from the running compensator. Likely cause (ASSUMED): ripple
+  on vc at the PWM comparator changes the effective modulator gain. The trend fits (larger vc
+  slope at turn-off, larger offset) but the simple formula 20·log(Sr/(Sr − Svc)) over-predicts
+  it 2-4×, so it is not quantified.
+- Run time: about 0.7-1 s for 15 points in CCM at fs = 100 kHz; low-fc DCM cases take a few
+  seconds (2000-period points).
+- Screenshots checked: VMC buck dark and PCMC buck light with 15 FRA points.
+
 ## Next step
 
-Phase 8, FRA from the switching simulation (plan section 6 and the Phase 8 check row).
+Phase 9: drag zeros/poles/gain on the Bode plot, tips text, DCM notes, polish; checks at
+desktop and phone width.
 `node tests/browser.js selftest` uses Chrome while Edge's `--dump-dom` is broken.
