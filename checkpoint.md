@@ -221,9 +221,8 @@ split by section and diffed against the main files; only the extra functions wer
   efficiency curve, Design light 520 px, Control light 1400 px.
 - Known: at 1400 px the header now wraps the theme switch to a second line (four page
   buttons).
-- NOT_VERIFIED: Save/Load JSON and Print by hand (file dialogs, print preview), PNG/CSV
-  download in a real browser (only the CSV text is tested), screenshots of the Converter page
-  with dead time and ringing (covered by the UI test, not looked at), the efficiency hover.
+- NOT_VERIFIED at the time: Save/Load JSON, Print, downloads, the efficiency hover and the
+  dead-time screenshots. All checked later in the "Check pass after the merge" entry.
 
 ### Phase 11: open items
 - ACMC closed-loop Zout. With a load current io: v̂o = Gvd·d̂ − Zout·îo, îL = Gid·d̂ + Zi·îo
@@ -252,7 +251,25 @@ split by section and diffed against the main files; only the extra functions wer
   uitest ALL PASS. Screenshots: Control ACMC light 1400 px (header, toolbar, both op-amp
   circuits), dark 1400 px.
 - NOT_VERIFIED: the current-amp circuit with a + input reference as a real build (only the
-  Zf/Zin ratio is tested), pulse skipping with sync rectifier.
+  Zf/Zin ratio is tested). Pulse skipping with the sync rectifier: tested in the check pass.
+
+### Check pass after the merge (on `main`)
+- All suites pass on `main`: Node, browser selftest, UI test.
+- Found: a PCMC run with D0 below the blanking time and a compensator designed at that point
+  ran away to Dmax (12 V buck gave 14.7 V). Cause: no steady state, plant gain 0, so the
+  k-factor gain was K = 1/0 (null in JSON), vc NaN, and the comparator never tripped. Already
+  there before Phase 11. The page was not affected (auto design is skipped without a steady
+  state). Fix: `designComp` keeps the gain at 1 with a note when the plant gain at fc is 0 or
+  not finite. Test added.
+- Pulse skipping with the sync rectifier: tested now (78 of 100 pulses skipped, Vo within
+  0.9 % of 1 V before, during and after a load step, FCCM).
+- Now verified in the UI test (77 checks): CSV, PNG and design JSON downloads (file contents
+  checked, download stubbed), Save/Load JSON round trip and refusal of a foreign file, Print
+  summary (print stubbed, 5+ tables, no NaN), efficiency hover (point at 50 % load, cleared on
+  leave). The PNG check polls for up to 3 s (toBlob is async).
+- Looked at: Converter sync with td = 200 ns (BD-Q2 intervals, vsw at −Vbd), async DCM with
+  Cnode = 1 nF (ringing, BD-S clamp at Vin + Vbd), Losses at 520 px.
+- Still NOT_VERIFIED: real file dialogs and the print preview, real mouse and touch input.
 
 ## Formula notes
 

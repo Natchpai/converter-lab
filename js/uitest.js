@@ -144,6 +144,32 @@ function runUiTests() {
     if (Math.abs(RES.met.vo.mean / design.specs.buck.Vo - 1) > 2e-3) throw new Error(`Vo ${RES.met.vo.mean}`);
     if (!/Applied design corner/.test($('#simWarn').textContent)) throw new Error('no apply note');
   });
+  // downloads are caught here (no file dialog in the test); PNG comes back async, checked in uiTest()
+  uiDownloads.length = 0; uiDownload0 = download; download = (b, n) => uiDownloads.push({ b, n });
+  step('Scope CSV and PNG buttons', () => {
+    click('#csvBtn'); click('#pngBtn');
+    const c = uiDownloads.find(d => /\.csv$/.test(d.n));
+    if (!c || c.b.type !== 'text/csv' || c.b.size < 1000) throw new Error('no CSV download');
+  });
+  step('Design save and load JSON', () => {
+    click('[data-group="page"] [data-v="design"]');
+    click('#dSave');
+    if (!uiDownloads.some(d => /^dcdc-design-buck\.json$/.test(d.n) && d.b.type === 'application/json')) throw new Error('no JSON download');
+    const j = JSON.parse(JSON.stringify(designJSON())), io = design.specs.buck.Io, ron = design.comp.ron, vg = state.p.Vg;
+    design.specs.buck.Io = 1.7; design.comp.ron = 0.1; design.sel.buck.L = 47e-6; state.p.Vg = 20;
+    applyDesignJSON(j);
+    if (design.specs.buck.Io !== io || design.comp.ron !== ron || design.sel.buck.L !== null || state.p.Vg !== vg) throw new Error('values not restored');
+    let threw = false; try { applyDesignJSON({ app: 'other' }); } catch (e) { threw = true; }
+    if (!threw) throw new Error('a foreign file was accepted');
+    clearTimeout(designTimer); design.out = designRun(state.topo, state.sync, design.specs.buck, design.comp, design.sel.buck); designDirty = false; renderDesign();
+  });
+  step('Design print summary', () => {
+    const pr = window.print; let n = 0;
+    window.print = () => { n++; };
+    try { click('#dPrint'); } finally { window.print = pr; }
+    const a = $('#printArea');
+    if (n !== 1 || !/design summary/.test(a.textContent) || a.querySelectorAll('table').length < 5 || /NaN/.test(a.textContent)) throw new Error(`print ${n}, ${a.querySelectorAll('table').length} tables`);
+  });
   step('page Losses', () => {
     click('[data-group="page"] [data-v="losses"]'); clearTimeout(lossTimer); renderLosses();
     if ($('#lWarn').textContent || !/%/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'no summary');
@@ -160,8 +186,19 @@ function runUiTests() {
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');
   return { allPass, lines: out };
 }
+const uiDownloads = [];
+let uiDownload0 = null;
 async function uiTest() {
   const r = runUiTests();
+  const add = (pass, text) => { r.allPass = r.allPass && pass; r.lines.push(`${pass ? 'PASS' : 'FAIL'} ${text}`); };
+  try {
+    for (let i = 0; i < 60 && !uiDownloads.some(d => /\.png$/.test(d.n)); i++) await new Promise(res => setTimeout(res, 50));   // toBlob is async
+    const png = uiDownloads.find(d => /\.png$/.test(d.n)), js = uiDownloads.find(d => /\.json$/.test(d.n));
+    const j = js ? JSON.parse(await js.b.text()) : null;
+    add(!!png && png.b.type === 'image/png' && png.b.size > 1000 && !!j && j.app === 'dcdc-converter-lab' && j.specs && j.comp,
+      `downloads: PNG ${png ? png.b.size + ' bytes' : 'missing'}, design JSON ${j ? 'parses' : 'missing'}`);
+  } catch (err) { add(false, 'downloads: threw ' + err.message); }
+  if (uiDownload0) download = uiDownload0;
   try {
     clearTimeout(lossTimer); lossState.src = 'design'; lossState.effKey = '';
     await runEff();
@@ -171,6 +208,15 @@ async function uiTest() {
     r.allPass = r.allPass && pass;
     r.lines.push(`${pass ? 'PASS' : 'FAIL'} efficiency vs load: ${n}/${want} points`);
   } catch (err) { r.allPass = false; r.lines.push('FAIL efficiency vs load: threw ' + err.message); }
+  try {
+    // hover at 50 % load picks that point; leaving clears it
+    const cv = $('#effChart'), rc = cv.getBoundingClientRect(), pw = cv.width - 146 * dpr, j = EFF_LOADS.indexOf(50);
+    const x = rc.left + (50 * dpr + 0.5 * pw) / dpr, y = rc.top + rc.height / 2;
+    cv.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+    const h1 = lossState.hover;
+    cv.dispatchEvent(new PointerEvent('pointerleave', { clientX: x, clientY: y }));
+    add(h1 === j && lossState.hover === -1, `efficiency hover: point ${h1} at 50 % load (want ${j}), ${lossState.hover} after leaving`);
+  } catch (err) { add(false, 'efficiency hover: threw ' + err.message); }
   r.lines[0] = r.allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES';
   window.__uitest = r;
   console.log(r.lines.join('\n'));

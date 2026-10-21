@@ -163,7 +163,9 @@ function designComp(type, plantK, fc, pm, fStart) {
   if (type === 'I') c.fi = 1;
   else c.K = 1;
   const g1 = Cx.abs(compEval(compNorm(c), fc)) * Cx.abs(plantK(fc));
-  if (type === 'I') c.fi = 1 / g1; else c.K = 1 / g1;
+  // a plant with no gain at fc (e.g. PCMC without a steady state) would give K = ∞ or NaN
+  if (g1 > 0 && isFinite(g1)) { if (type === 'I') c.fi = 1 / g1; else c.K = 1 / g1; }
+  else notes.push('The plant has no finite gain at fc, so the gain is left at 1.');
   const expectPm = type === 'P' ? 180 + phi : type === 'I' ? 90 + phi : pm;
   if (type === 'P' || type === 'I') notes.push(`${COMP_TYPES[type].name} adds no phase boost: expected PM ${expectPm.toFixed(0)}°.`);
   return { comp: c, phi, boost, notes };

@@ -279,6 +279,15 @@ function runControlTests() {
     const nSkip = ds.filter(d => d === 0).length, dOn = Math.min(...ds.filter(d => d > 0));
     check(nSkip > 0 && dOn >= 0.15 - 1e-9 && rel(fin, 1) < 0.02 && c.L.warn.some(w => /skips pulses/.test(w)),
       `PCMC blanking tb = 0.15, Vo* = 1 V (D0 ${c.L.D0.toFixed(3)}): ${nSkip} of the last 100 pulses skipped, shortest pulse ${dOn.toFixed(4)} (min on-time), Vo ${fin.toFixed(4)} V`);
+    // sync rectifier: a skipped pulse leaves Q2 on, iL goes negative (FCCM); Vo must still hold
+    const pS = { ...pB, sync: true, Vf: 0, ron2: 0.03 }, compS = pcDesign(pS, 5, 0.5, 10e3, 60).cfg.comp;
+    const LS = buildLoop(pS, { ...pcCfg(compS, 1, 0.5), tb: 0.15 }), rS = computeResCL(LS, { event: 'load', size: 50, back: true, nPer: 300, N: 200, pre: 60 });
+    const dS = Array.from(rS.sim.duty.slice(-100)), finS = rS.met.segs.map(g => g.final), kS = dS.filter(d => d === 0).length;
+    check(kS > 0 && Math.min(...dS.filter(d => d > 0)) >= 0.15 - 1e-9 && finS.every(v => rel(v, 1) < 0.02),
+      `PCMC blanking sync tb = 0.15, Vo* = 1 V: ${kS} of 100 pulses skipped, Vo ${finS.map(v => v.toFixed(4)).join(' / ')} V (before / load step / back), ${rS.met.mode}`);
+    // no steady state (plant gain 0): k-factor design keeps a finite gain
+    const dz = designComp('T2', () => Cx.of(0), 1e3, 60, 10);
+    check(dz.comp.K === 1 && isFinite(dz.comp.fz1), `k-factor with a zero plant gain: K kept at ${dz.comp.K} (${dz.notes.slice(-1)[0]})`);
   }
 
   // ---- average current mode
