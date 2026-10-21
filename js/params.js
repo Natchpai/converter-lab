@@ -78,7 +78,7 @@ const PDEF = Object.fromEntries([...PARAMS, ...NONIDEAL].map(d => [d.k, d]));
 
 const state = {
   topo: 'buck', nonideal: false, sync: false, view: 'steady',
-  layout: 'split', theory: true, shade: true, scopeBg: 'dark',
+  layout: 'split', theory: true, shade: false, scopeBg: 'dark',
   tdiv: 'auto', hpos: 0.1, win: 'auto',
   c1: 0.3, c2: 0.55, playing: false, applyNote: '',
   p: {},
