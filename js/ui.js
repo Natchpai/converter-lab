@@ -13,7 +13,7 @@ function buildParams(list, host) {
     </div>`).join('');
   for (const d of list) {
     const sl = $('#sl-' + d.k), nb = $('#nb-' + d.k);
-    sl.addEventListener('input', () => { state.p[d.k] = sliderVal(d, sl.value); nb.value = fmtParam(d, state.p[d.k]); paramChanged(); });
+    sl.addEventListener('input', () => { state.applyNote = ''; state.p[d.k] = sliderVal(d, sl.value); nb.value = fmtParam(d, state.p[d.k]); paramChanged(); });
     nb.addEventListener('change', () => {
       let v = parseSI(nb.value);
       if (isFinite(v)) state.p[d.k] = clamp(v, d.min, d.max);
@@ -105,23 +105,32 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
     if (grp === 'page') { setPage(v); return; }
     if (grp === 'nonideal' || grp === 'sync') state[grp] = v === '1'; else state[grp] = v;
     if (grp === 'view') { state.hpos = v === 'steady' ? 0.1 : 0; $('#hposRange').value = state.hpos; state.tdiv = 'auto'; $('#tdivSel').value = 'auto'; }
-    if (grp === 'topo' || grp === 'sync') buildSchem();
+    if (grp === 'topo' || grp === 'sync') { buildSchem(); buildSpecUI(); buildCompUI(); requestDesign(); }
     if (grp === 'layout') { updateChannelUI(); updateSegs(); renderLive(); return; }
     updateSegs(); updateNonIdealUI(); requestCompute();
   });
 });
 
-// Switch between the Converter and Control pages. Each page keeps its channels and time base.
+// Pages: Design and Losses have their own panels; Converter and Control share the scope.
+// Each scope page keeps its channels and time base (state.simPage is the one loaded in state.ch).
+const PAGES = ['design', 'converter', 'losses', 'control'];
+const onSimPage = () => state.page === 'converter' || state.page === 'control';
 function setPage(pg, noCompute) {
-  if (pg !== 'converter' && pg !== 'control') return;
-  const old = state.pages[state.page];
-  old.tdiv = state.tdiv; old.hpos = state.hpos;
+  if (!PAGES.includes(pg)) return;
   state.page = pg;
-  const cur = state.pages[pg];
-  state.ch = cur.ch; state.tdiv = cur.tdiv; state.hpos = cur.hpos;
-  $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
   document.body.dataset.page = pg;
-  buildChannels(); updateSegs(); updateNonIdealUI();
+  updateSegs();
+  if (pg === 'design') { if (designDirty) requestDesign(); return; }
+  if (pg === 'losses') { sizeCanvas(effCv, 320); drawEff(); requestLosses(); return; }
+  if (pg !== state.simPage) {
+    const old = state.pages[state.simPage];
+    old.tdiv = state.tdiv; old.hpos = state.hpos;
+    const cur = state.pages[pg];
+    state.ch = cur.ch; state.tdiv = cur.tdiv; state.hpos = cur.hpos;
+    $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
+    state.simPage = pg;
+  }
+  buildChannels(); updateNonIdealUI();
   if (!noCompute) requestCompute();
 }
 
@@ -194,14 +203,14 @@ function sizeCanvas(cv, cssH) {
 function resize() {
   const w = els.screen.clientWidth;
   sizeCanvas(els.scope, Math.round(clamp(w * 0.56, 260, 560)));
-  if (RES) renderLiveNow();
+  if (RES && onSimPage()) renderLiveNow();
   drawPageCanvas(true);
 }
 new ResizeObserver(() => resize()).observe(els.screen);
 new ResizeObserver(() => drawPageCanvas(true)).observe(els.mm.parentElement);
 // The canvas of the side panel on the current page (mode map or Bode plot).
 function drawPageCanvas(resized) {
-  if (!RES) return;
+  if (!RES || !onSimPage()) return;
   if (state.page === 'control') { if (resized) sizeBode(); drawBode(); }
   else { if (resized) sizeCanvas(els.mm, 210); drawModeMap(); }
 }
@@ -232,15 +241,36 @@ function requestCompute() {
 }
 function renderLive() {
   if (pendingRender) return; pendingRender = true;
-  requestAnimationFrame(() => { pendingRender = false; if (RES) renderLiveNow(); });
+  requestAnimationFrame(() => { pendingRender = false; if (RES && onSimPage()) renderLiveNow(); });
 }
 function renderLiveNow() {
   renderScope(); renderReadout();
   if (state.page === 'control') renderControlLive(); else renderSchem();
 }
 function renderAll() {
-  if (!RES) return;
+  if (!RES || !onSimPage()) return;
   renderScope(); renderReadout();
   if (state.page === 'control') { renderControl(); drawBode(); }
   else { renderSchem(); renderTheory(); drawModeMap(); }
 }
+
+/* ---------- export: scope CSV and PNG ---------- */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+// Enabled channels as CSV text (every sample, thinned to about 50k rows).
+function scopeCSV(res) {
+  const keys = [...new Set(state.ch.filter(c => c.on).map(c => c.sig))];
+  if (!keys.length) keys.push('iL');
+  const r = res.rec, arrs = keys.map(k => sigArr(res, k));
+  const stride = Math.max(1, Math.ceil(r.n / 50000));
+  const lines = ['t (s),' + keys.map(k => `${SIG[k].n}${SIG[k].u ? ` (${SIG[k].u})` : ''}`).join(',')];
+  for (let i = 0; i < r.n; i += stride) lines.push(r.t[i].toPrecision(8) + ',' + arrs.map(a => a[i].toPrecision(7)).join(','));
+  return lines.join('\n');
+}
+const exportName = () => `dcdc-${state.topo}-${state.page === 'control' ? 'control' : state.view}`;
+$('#csvBtn').addEventListener('click', () => { if (RES) download(new Blob([scopeCSV(RES)], { type: 'text/csv' }), exportName() + '.csv'); });
+$('#pngBtn').addEventListener('click', () => els.scope.toBlob(b => { if (b) download(b, exportName() + '.png'); }));

@@ -4,6 +4,8 @@
 // Clicks through the Control page like a user and checks that every step leaves a sane page:
 // no uncaught error, a slider row for every compensator parameter, no NaN in the readouts and
 // finite Bode curves. Each step computes and renders at once, so no timers are needed.
+// Then the Converter (dead time, ringing, CSV), Design and Losses pages; the efficiency
+// curve runs in time slices, so uiTest() checks it after the synchronous steps.
 function runUiTests() {
   const out = [], errors = [];
   let allPass = true;
@@ -25,6 +27,10 @@ function runUiTests() {
         if (n) bad.push(`${c.short}: ${n} non-finite points`);
       }
     }
+    const noNaN = ids => { for (const id of ids) if (/NaN/.test($(id).textContent)) bad.push(`NaN in ${id}`); };
+    if (state.page === 'converter') noNaN(['#measTbl', '#cmpTbl', '#headVals', '#schemInfo']);
+    if (state.page === 'design') noNaN(['#dSizeTbl', '#dCornerTbl', '#dRateTbl']);
+    if (state.page === 'losses') noNaN(['#lSum', '#lTbl', '#lCoreTbl']);
     const pass = !bad.length;
     allPass = allPass && pass;
     const types = CTL.cfg.mode === 'acmc' ? `${CTL.cfg.ci.type}/${CTL.cfg.comp.type}` : CTL.cfg.comp.type;
@@ -100,12 +106,67 @@ function runUiTests() {
     if (fraDots().length) throw new Error('old FRA points still drawn');
   });
   step('page Converter', () => click('[data-group="page"] [data-v="converter"]'));
+  step('Converter sync with dead time', () => {
+    click('[data-group="sync"] [data-v="1"]'); compute();
+    if (!Array.from(RES.rec.st.subarray(0, RES.rec.n)).includes(BDR)) throw new Error('no body-diode interval');
+  });
+  step('Converter DCM with node ringing', () => {
+    click('[data-group="sync"] [data-v="0"]'); click('[data-preset="dcm"]'); compute();
+    const r = RES.rec; let z = 0;
+    for (let i = 1; i < r.n; i++) if (r.st[i] === IDLE && r.st[i - 1] === IDLE && r.iL[i - 1] * r.iL[i] < 0) z++;
+    if (!RES.m.ring || z < 3) throw new Error(`ring ${RES.m.ring}, ${z} zero crossings of iL while IDLE`);
+  });
+  step('CSV export text', () => {
+    const t = scopeCSV(RES), n = t.split('\n').length;
+    if (n < 100 || /NaN/.test(t)) throw new Error(`${n} lines`);
+  });
+  const designNow = () => { clearTimeout(designTimer); design.out = designRun(state.topo, state.sync, design.specs[state.topo], design.comp, design.sel[state.topo]); designDirty = false; renderDesign(); };
+  const designOk = () => { const o = design.out; if (o.errs.length || o.corners.length !== 3 || o.corners.some(c => !c.ok)) throw new Error(o.errs.join(' ') || 'corner failed'); };
+  step('page Design', () => { click('[data-group="page"] [data-v="design"]'); designNow(); designOk(); });
+  step('Design Io = 1 A', () => {
+    const inp = $('#sp-Io'); inp.value = '1'; inp.dispatchEvent(new Event('change'));
+    designNow(); designOk();
+    if (design.specs.buck.Io !== 1) throw new Error('spec not taken');
+  });
+  step('Design sync with a generic Q2 class', () => {
+    click('[data-group="sync"] [data-v="1"]');
+    const sel = $('#compList select[data-part="Q2"]'); sel.value = '1'; sel.dispatchEvent(new Event('change'));
+    designNow(); designOk();
+  });
+  step('Design apply corner Vin max', () => {
+    $('#dCorner').value = '2'; click('#dApply'); compute(); renderAll();
+    if (state.page !== 'converter' || state.p.Vg !== design.specs.buck.VinMax) throw new Error(`page ${state.page}, Vg ${state.p.Vg}`);
+    if (Math.abs(RES.met.vo.mean / design.specs.buck.Vo - 1) > 2e-3) throw new Error(`Vo ${RES.met.vo.mean}`);
+    if (!/Applied design corner/.test($('#simWarn').textContent)) throw new Error('no apply note');
+  });
+  step('page Losses', () => {
+    click('[data-group="page"] [data-v="losses"]'); clearTimeout(lossTimer); renderLosses();
+    if ($('#lWarn').textContent || !/%/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'no summary');
+  });
+  step('Losses load 20 %', () => {
+    const inp = $('#lLoad'); inp.value = '20'; inp.dispatchEvent(new Event('change'));
+    if (lossState.load !== 20 || $('#lWarn').textContent) throw new Error($('#lWarn').textContent || `load ${lossState.load}`);
+  });
+  step('Losses source Converter page', () => {
+    const sel = $('#lSrc'); sel.value = 'sim'; sel.dispatchEvent(new Event('change'));
+    if ($('#lWarn').textContent || !/Converter page/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'wrong source');
+  });
   window.removeEventListener('error', onErr);
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');
   return { allPass, lines: out };
 }
-function uiTest() {
+async function uiTest() {
   const r = runUiTests();
+  try {
+    clearTimeout(lossTimer); lossState.src = 'design'; lossState.effKey = '';
+    await runEff();
+    const e = lossState.eff, want = 3 * EFF_LOADS.length;
+    const n = e ? e.series.reduce((a, x) => a + x.pts.filter(p => isFinite(p.eta) && p.eta > 0 && p.eta < 1).length, 0) : 0;
+    const pass = !!e && !e.partial && n === want;
+    r.allPass = r.allPass && pass;
+    r.lines.push(`${pass ? 'PASS' : 'FAIL'} efficiency vs load: ${n}/${want} points`);
+  } catch (err) { r.allPass = false; r.lines.push('FAIL efficiency vs load: threw ' + err.message); }
+  r.lines[0] = r.allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES';
   window.__uitest = r;
   console.log(r.lines.join('\n'));
   $('#selftest').textContent = r.lines.join('\n');

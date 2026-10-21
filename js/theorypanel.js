@@ -99,6 +99,7 @@ function renderTheory() {
   const w = [];
   if (!res.ok) w.push('Steady state did not fully converge. Values are approximate.');
   if (res.note) w.push(res.note);
+  if (state.applyNote) w.push(state.applyNote);
   if (!res.steady && th.dcm) w.push('Theory column shows the final steady state.');
   els.simWarn.textContent = w.join(' ');
   els.eqTbl.innerHTML = eqRows(p, th).map(([tag, f, v, act]) =>

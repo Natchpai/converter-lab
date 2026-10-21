@@ -28,6 +28,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 7 | Average current-mode control | done |
 | 8 | FRA from the switching sim | done |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | done |
+| 10 | Merge Design and Losses pages from `buck-boost-buckBoost-index.html` | done |
 
 ## Log
 
@@ -193,6 +194,36 @@ Screenshots checked: Control page PCMC dark and light at 1400 px, PCMC at 520 px
 1400 px (unchanged). NOT_VERIFIED: switching PCMC → VMC by hand in a real browser (the
 VMC → PCMC click path runs at start with `?mode=pcmc`).
 
+### Phase 10: merge of `buck-boost-buckBoost-index.html`
+Source: the untracked single-file app with the same base as the Converter page. Its code was
+split by section and diffed against the main files; only the extra functions were copied.
+- Header page switch: Design | Converter | Losses | Control. Design and Losses use the source
+  panel layout (`dlayout`, `llayout`); `?page=design|losses` works. The source tab bar and the
+  localStorage-remembered tab were not copied.
+- Model (`model.js`, `sim.js`): states BDR/BDS, dead time `td`, body diode `Vbd`, node
+  capacitance `Cn` (rings in DCM). Main's API kept: `m.step(st, iL, vC, h, vn = 0)`, `m.der`,
+  `m.vout`, `p.Ix`, `m.offRises`. `simulate` runs the old loop unless `td > 0` or `Cn > 0`,
+  then `simulateFree` (source loop). Records carry `vn`.
+- Control page: `effParams` sets td = Vbd = Cn = 0 (the closed-loop stepper is 2-state); the
+  three rows are hidden there with a hint line.
+- New files: `design.js`, `losses.js` (pure, in `PURE`), `design-ui.js`, `losses-ui.js`.
+  Scope CSV/PNG export in `ui.js` (works on Converter and Control). Wider slider ranges and
+  the 5-state shading and schematic text are copied too.
+- Changed on purpose vs the source: the Losses "Converter page" source always solves a fresh
+  steady state (RES can be stale or a closed-loop result); the efficiency colours use the
+  existing `--s1..--s3` tokens (same values as the source `--series-*`).
+- Checks: Node ALL PASS; every old test line identical (timings ignored), 16 new lines. The
+  16 copied tests give the same numbers as the source file's own `?selftest` in Chrome.
+  Browser selftest ALL PASS. UI test ALL PASS (71 steps; new: dead time, DCM ringing, CSV
+  text, Design run, spec edit, Q2 class, Apply to simulation, Losses, load %, source,
+  efficiency 36/36 points). Screenshots: Design dark 1400 px, Losses dark 1400 px with the
+  efficiency curve, Design light 520 px, Control light 1400 px.
+- Known: at 1400 px the header now wraps the theme switch to a second line (four page
+  buttons).
+- NOT_VERIFIED: Save/Load JSON and Print by hand (file dialogs, print preview), PNG/CSV
+  download in a real browser (only the CSV text is tested), screenshots of the Converter page
+  with dead time and ringing (covered by the UI test, not looked at), the efficiency hover.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -322,8 +353,8 @@ Structure: iref = Gcv·(Vref − H·|vo|) (limited to 0..vcMax), vc = Gci·(iref
   pointer events in the UI test).
 
 ## Status
-All phases of the plan are done on `feat/control-lab`. Not pushed or merged (needs a
-separate request).
+All phases of the plan are done and merged to `main`. Phase 10 (merge of the single-file
+Design and Losses pages) is on `feat/design-losses`, not merged or pushed.
 
 Open items, none blocking:
 - ACMC closed-loop Zout curve and current-amplifier op-amp values.

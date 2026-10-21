@@ -14,24 +14,92 @@
     <span>Buck, Boost and Buck-Boost in CCM and DCM, with a 4-channel scope</span>
   </div>
   <div class="seg page" data-group="page" role="group" aria-label="Page">
-    <button data-v="converter">Converter</button><button data-v="control">Control</button>
+    <button data-v="design">Design</button><button data-v="converter">Converter</button><button data-v="losses">Losses</button><button data-v="control">Control</button>
   </div>
   <div class="seg" data-group="topo" role="group" aria-label="Topology">
     <button data-v="buck">Buck</button><button data-v="boost">Boost</button><button data-v="bb">Buck-Boost</button>
   </div>
-  <div class="seg" data-group="nonideal" role="group" aria-label="Model">
+  <div class="seg simOnly" data-group="nonideal" role="group" aria-label="Model">
     <button data-v="0">Ideal</button><button data-v="1">Non-ideal</button>
   </div>
   <div class="seg" data-group="sync" role="group" aria-label="Rectifier">
     <button data-v="0">Async (diode)</button><button data-v="1">Sync (MOSFET)</button>
   </div>
-  <div class="seg convOnly" data-group="view" role="group" aria-label="View">
+  <div class="seg convOnly simOnly" data-group="view" role="group" aria-label="View">
     <button data-v="steady">Steady state</button><button data-v="startup">Startup</button>
   </div>
   <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
     <button data-t="light">☀ Light</button><button data-t="dark">☾ Night</button>
   </div>
 </header>
+
+<main class="dlayout designOnly" id="page-design">
+  <section class="panel dspec">
+    <h2>Specification</h2>
+    <div id="specList"></div>
+    <p class="hint" id="specNote"></p>
+  </section>
+
+  <section class="panel dcomp">
+    <h2>Components</h2>
+    <p class="hint">Generic classes fill in typical values. They are not real part numbers: type the values from your datasheets.</p>
+    <div id="compList"></div>
+  </section>
+
+  <section class="panel dres">
+    <div class="dresHead">
+      <h2>Results</h2>
+      <span class="hint" id="dStatus"></span>
+    </div>
+    <div class="derr" id="dErr"></div>
+    <h3>Sizing (worst case over V<sub>in</sub>)</h3>
+    <div class="tblWrap"><table class="data" id="dSizeTbl"></table></div>
+    <h3>Operating points (simulated, D solved for the target V<sub>o</sub> at I<sub>o,max</sub>)</h3>
+    <div class="tblWrap"><table class="data" id="dCornerTbl"></table></div>
+    <h3>Stress vs rating</h3>
+    <div class="tblWrap"><table class="data" id="dRateTbl"></table></div>
+    <div class="dActions">
+      <label>Corner <select id="dCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
+      <button class="btn primary" id="dApply">Apply to simulation</button>
+      <button class="btn" id="dSave">Save design (JSON)</button>
+      <button class="btn" id="dLoadBtn">Load design</button>
+      <input type="file" id="dLoad" accept=".json,application/json" hidden>
+      <button class="btn" id="dPrint">Print summary</button>
+    </div>
+    <h3>Design equations (ideal CCM)</h3>
+    <table class="eq" id="dEqTbl"></table>
+    <h3>Design notes</h3>
+    <ul class="tips" id="dTips"></ul>
+  </section>
+</main>
+
+<main class="llayout lossOnly" id="page-losses">
+  <section class="panel">
+    <div class="dresHead"><h2>Loss breakdown</h2><span class="hint" id="lStatus"></span></div>
+    <div class="dActions">
+      <label>Source <select id="lSrc"><option value="design">Design corner</option><option value="sim">Converter page operating point</option></select></label>
+      <label id="lCornerWrap">Corner <select id="lCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
+      <label id="lLoadWrap">Load <input class="num" id="lLoad" type="text" value="100 %" style="width:84px" aria-label="Load in percent of Io max"></label>
+    </div>
+    <p class="warn" id="lWarn"></p>
+    <div class="lsum" id="lSum"></div>
+    <div id="lBars" role="list" aria-label="Losses by source, largest first"></div>
+    <h3>Loss table</h3>
+    <div class="tblWrap"><table class="data" id="lTbl"></table></div>
+    <h3>Inductor core</h3>
+    <div class="tblWrap"><table class="data" id="lCoreTbl"></table></div>
+    <p class="hint">Switching, gate and core data come from the Design page components. Conduction losses come from the simulated waveforms.</p>
+  </section>
+  <section class="panel">
+    <div class="dresHead"><h2>Efficiency vs load</h2><span class="hint" id="eStatus"></span></div>
+    <p class="hint">The design at V<sub>in</sub> min, nom and max. D is solved at every point so V<sub>o</sub> stays on target. Hover or tap for values.</p>
+    <canvas id="effChart" aria-label="Efficiency versus load for three input voltages"></canvas>
+    <div class="legend" id="effLegend"></div>
+    <details><summary>Table view</summary><div class="tblWrap"><table class="data" id="effTbl"></table></div></details>
+    <h3>What to look at</h3>
+    <ul class="tips" id="lTips"></ul>
+  </section>
+</main>
 
 <main class="layout">
   <aside class="controls panel">
@@ -47,6 +115,7 @@
     <h2>Non-ideal parts</h2>
     <p class="hint" id="nonIdealHint">Select <b>Non-ideal</b> at the top to use these values.</p>
     <div id="nonIdealList"></div>
+    <p class="hint ctlOnly">Dead time, body diodes and node capacitance are used on the Converter page only. The closed-loop simulation leaves them out.</p>
   </aside>
 
   <section class="scopeWrap panel">
@@ -61,6 +130,8 @@
       </div>
       <label class="convOnly"><input type="checkbox" id="theoryChk" checked> Theory overlay</label>
       <label><input type="checkbox" id="shadeChk" checked> Shade intervals</label>
+      <button class="btn" id="csvBtn" title="Download the enabled channels as CSV">CSV</button>
+      <button class="btn" id="pngBtn" title="Download the scope screen as PNG">PNG</button>
     </div>
     <div class="scopeHead">
       <label>Time/div <select id="tdivSel"></select></label>
@@ -114,9 +185,11 @@
 <footer>
   Model: switched piecewise-linear circuit (states i<sub>L</sub>, v<sub>C</sub>) integrated with RK4. Steady state is found with a
   shooting (Newton) method on one switching period. Startup starts from i<sub>L</sub> = 0, v<sub>C</sub> = 0. Theory uses ideal parts and the
-  small-ripple approximation. Real circuits also ring at the switch node in DCM; this model does not include parasitic capacitance.
+  small-ripple approximation. Non-ideal mode adds dead time with body diodes and a switch-node capacitance that rings in DCM.
+  Switching, reverse recovery, gate and core (iGSE) losses are computed from the simulated waveforms on the Losses page.
   <div id="selftest"></div>
 </footer>
+<div id="printArea"></div>
 
 <script src="js/params.js"></script>
 <script src="js/util.js"></script>
@@ -124,6 +197,8 @@
 <script src="js/sim.js"></script>
 <script src="js/theory.js"></script>
 <script src="js/results.js"></script>
+<script src="js/design.js"></script>
+<script src="js/losses.js"></script>
 <script src="js/scope.js"></script>
 <script src="js/schem.js"></script>
 <script src="js/theorypanel.js"></script>
@@ -138,6 +213,8 @@
 <script src="js/selftest-cl.js"></script>
 <script src="js/bode.js"></script>
 <script src="js/control-ui.js"></script>
+<script src="js/design-ui.js"></script>
+<script src="js/losses-ui.js"></script>
 <script src="js/uitest.js"></script>
 <script src="js/main.js"></script>
 </body>

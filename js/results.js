@@ -31,7 +31,7 @@ function sigArr(res, key) {
   if (res.sigArray) { if (!res.cache[key]) res.cache[key] = res.sigArray(key); return res.cache[key]; }
   if (!res.cache[key]) {
     const r = res.rec, a = new Float64Array(r.n);
-    for (let i = 0; i < r.n; i++) a[i] = res.m.sig(key, r.st[i], r.iL[i], r.vC[i]);
+    for (let i = 0; i < r.n; i++) a[i] = res.m.sig(key, r.st[i], r.iL[i], r.vC[i], r.vn[i]);
     res.cache[key] = a;
   }
   return res.cache[key];
@@ -39,7 +39,7 @@ function sigArr(res, key) {
 function thSigArr(res, key) {
   if (!res.thCache[key]) {
     const r = res.thRec, a = new Float64Array(r.n);
-    for (let i = 0; i < r.n; i++) a[i] = res.thModel.sig(key, r.st[i], r.iL[i], r.vC[i]);
+    for (let i = 0; i < r.n; i++) a[i] = res.thModel.sig(key, r.st[i], r.iL[i], r.vC[i], r.vn[i]);
     res.thCache[key] = a;
   }
   return res.thCache[key];
@@ -88,13 +88,13 @@ function stateAt(res, t) {
   t = clamp(t, r.t[0], r.t[r.n - 1]);
   let i = upperBound(r.t, r.n, t) - 1;
   if (i < 0) i = 0;
-  if (i >= r.n - 1) return { st: r.st[r.n - 1], iL: r.iL[r.n - 1], vC: r.vC[r.n - 1] };
+  if (i >= r.n - 1) return { st: r.st[r.n - 1], iL: r.iL[r.n - 1], vC: r.vC[r.n - 1], vn: r.vn[r.n - 1] };
   const t0 = r.t[i], t1 = r.t[i + 1];
   if (t1 > t0 && r.st[i] === r.st[i + 1]) {
     const f = (t - t0) / (t1 - t0);
-    return { st: r.st[i], iL: r.iL[i] + f * (r.iL[i + 1] - r.iL[i]), vC: r.vC[i] + f * (r.vC[i + 1] - r.vC[i]) };
+    return { st: r.st[i], iL: r.iL[i] + f * (r.iL[i + 1] - r.iL[i]), vC: r.vC[i] + f * (r.vC[i + 1] - r.vC[i]), vn: r.vn[i] + f * (r.vn[i + 1] - r.vn[i]) };
   }
-  return { st: r.st[i], iL: r.iL[i], vC: r.vC[i] };
+  return { st: r.st[i], iL: r.iL[i], vC: r.vC[i], vn: r.vn[i] };
 }
 function valueAt(res, key, t) {
   if (res.sigArray) {   // closed loop: interpolate the recorded signal
@@ -103,5 +103,5 @@ function valueAt(res, key, t) {
     const i = clamp(upperBound(r.t, r.n, t) - 1, 0, r.n - 2), dt = r.t[i + 1] - r.t[i];
     return dt > 0 ? a[i] + (a[i + 1] - a[i]) * (t - r.t[i]) / dt : a[i + 1];
   }
-  const s = stateAt(res, t); return res.m.sig(key, s.st, s.iL, s.vC);
+  const s = stateAt(res, t); return res.m.sig(key, s.st, s.iL, s.vC, s.vn);
 }

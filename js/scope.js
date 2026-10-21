@@ -13,6 +13,7 @@ let RES = null;
 let dpr = window.devicePixelRatio || 1;
 
 function compute() {
+  if (!onSimPage()) return;   // Design and Losses compute their own results
   RES = state.page === 'control' ? computeControl() : computeRes(effParams(), state.view, state.win);
 }
 
@@ -143,7 +144,7 @@ function renderScope() {
   if (state.shade) {
     const segs = segments(res, win);
     if (segs) {
-      const fill = ['rgba(34,197,94,0.10)', 'rgba(249,115,22,0.09)', 'rgba(148,163,184,0.10)'];
+      const fill = ['rgba(34,197,94,0.10)', 'rgba(249,115,22,0.09)', 'rgba(148,163,184,0.10)', 'rgba(192,132,252,0.22)', 'rgba(192,132,252,0.22)'];
       for (const [a, b, st] of segs) {
         const xa = X(a), xb = X(b);
         if (xb < 0 || xa > W) continue;

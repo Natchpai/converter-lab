@@ -120,7 +120,7 @@ function renderSchem() {
   const res = RES; if (!res) return;
   const [t1] = cursorTimes();
   const s = stateAt(res, t1), st = s.st, m = res.m;
-  const v = k => m.sig(k, st, s.iL, s.vC);
+  const v = k => m.sig(k, st, s.iL, s.vC, s.vn);
   const blade = (id, closed) => {
     const b = document.querySelector(`#${id} .blade`); if (!b) return;
     const cx = b.getAttribute('data-cx');
@@ -130,29 +130,38 @@ function renderSchem() {
   const cD = document.getElementById('cD');
   if (state.sync) blade('cD', st === OFF); else cD.classList.toggle('on', st === OFF);
   const rev = s.iL < 0;
-  const capAct = st === IDLE || (st === ON && state.topo !== 'buck');
-  [['on', st === ON], ['off', st === OFF], ['cap', capAct]].forEach(([k, a]) => {
+  // body-diode states use the loop of their device: BDS -> S side, BDR -> rectifier side
+  const sSide = st === ON || st === BDS, rSide = st === OFF || st === BDR;
+  const capAct = st === IDLE || (sSide && state.topo !== 'buck');
+  [['on', sSide], ['off', rSide], ['cap', capAct]].forEach(([k, a]) => {
     document.getElementById('glow-' + k).classList.toggle('act', a);
     const f = document.getElementById('flow-' + k);
     f.classList.toggle('act', a);
     f.classList.toggle('rev', k !== 'cap' && rev);
   });
   const dn = state.sync ? 'Q2' : 'D';
-  document.getElementById('lblS').textContent = `S · ${st === ON ? 'ON' : 'OFF'}`;
-  document.getElementById('lblD').textContent = `${dn} · ${st === OFF ? 'ON' : 'OFF'}`;
+  document.getElementById('lblS').textContent = `S · ${st === ON ? 'ON' : st === BDS ? 'body diode' : 'OFF'}`;
+  document.getElementById('lblD').textContent = `${dn} · ${st === OFF ? 'ON' : st === BDR ? 'body diode' : 'OFF'}`;
   document.getElementById('lblIL').textContent = `iL = ${fmtSI(s.iL, 'A')}`;
   document.getElementById('lblVo').textContent = `vo = ${fmtSI(v('vo'), 'V')}`;
   document.getElementById('lblVg').textContent = fmtSI(res.p.Vg, 'V', 3);
   document.getElementById('lblIo').textContent = fmtSI(res.p.R, 'Ω');
   document.getElementById('lblESR').textContent = state.nonideal ? `ESR ${fmtSI(res.p.rc, 'Ω')}` : '';
-  const desc = DESC[state.topo][ST_NAME[st]].replace('{D}', state.sync ? 'Q2' : 'the diode D');
+  let desc;
+  if (st === BDR) desc = 'Dead time: both FETs are off and i<sub>L</sub> &gt; 0 flows through the body diode of Q2 (drop V<sub>bd</sub>). ' +
+    'This costs conduction loss, and the diode charge Q<sub>rr</sub> is lost when S turns on.';
+  else if (st === BDS) desc = 'i<sub>L</sub> is negative and flows through the body diode of S. The switch node sits at the S-side rail, ' +
+    'so S can turn on at almost zero voltage (ZVS).';
+  else desc = DESC[state.topo][ST_NAME[st]].replace('{D}', state.sync ? 'Q2' : 'the diode D');
+  if (st === IDLE && res.m.ring) desc = 'Both off, the switch node floats. L and C<sub>node</sub> ring at f ≈ 1/(2π√(L·C<sub>node</sub>)) = ' +
+    `${fmtSI(1 / (2 * Math.PI * Math.sqrt(res.p.L * res.p.Cn)), 'Hz')}. The ringing decays through DCR and ESR. C alone feeds the load.`;
   let extra = '';
   if (st === OFF && s.iL < 0) extra = ' <b>i<sub>L</sub> is negative:</b> Q2 conducts backwards and energy returns toward the input.';
   if (st === ON && s.iL < 0) extra = ' <b>i<sub>L</sub> is still negative:</b> current flows back into the source through S.';
   const vals = [['iL', s.iL, 'A'], ['vL', v('vL'), 'V'], ['vsw', v('vsw'), 'V'], ['iin', v('iin'), 'A'],
     ['iD', v('iD'), 'A'], ['iC', v('iC'), 'A'], ['vC', v('vC'), 'V'], ['vo', v('vo'), 'V']];
   els.schemInfo.innerHTML =
-    `<span class="stTag" style="color:${st === ON ? 'var(--glow-on)' : st === OFF ? 'var(--glow-off)' : 'var(--glow-cap)'}">${ST_NAME[st]} interval</span>` +
+    `<span class="stTag" style="color:${sSide ? 'var(--glow-on)' : rSide ? 'var(--glow-off)' : 'var(--glow-cap)'}">${ST_NAME[st]} interval</span>` +
     ` at t = ${fmtSI(t1, 's', 4)}. ${desc}${extra}` +
     `<div class="vals">${vals.map(([n, x, u]) => `<span>${n} = ${fmtSI(x, u)}</span>`).join('')}</div>`;
 }
