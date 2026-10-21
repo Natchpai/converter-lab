@@ -50,13 +50,19 @@ function ssTF(A, B, c, E) {
   };
 }
 
-// Zeros of y/u in rad/s: roots of c·adj(sI − A)·B + E·det(sI − A).
-function ssZeros(A, B, c, E) {
+// y/u = num(s)/den(s) in ascending powers: num = c·adj(sI − A)·B + E·det(sI − A),
+// den = det(sI − A).
+function ssPoly(A, B, c, E) {
   const [a00, a01] = A[0], [a10, a11] = A[1];
   const tr = a00 + a11, dt = a00 * a11 - a01 * a10;
   const cB = c[0] * B[0] + c[1] * B[1];
   const cKB = c[0] * (-a11 * B[0] + a01 * B[1]) + c[1] * (a10 * B[0] - a00 * B[1]);
-  return quadRoots(E, cB - E * tr, cKB + E * dt);
+  return { num: [cKB + E * dt, cB - E * tr, E], den: [dt, -tr, 1] };
+}
+// Zeros of y/u in rad/s.
+function ssZeros(A, B, c, E) {
+  const { num } = ssPoly(A, B, c, E);
+  return quadRoots(num[2], num[1], num[0]);
 }
 
 // Averaged CCM plant (state-space averaging of the switched model). Valid for CCM and for
@@ -79,6 +85,7 @@ function averagedPlant(p, D, af = ccmAffine(p)) {
     Gvg: ssTF(A, Bg, dc.c, 0),
     Zout: f => Cx.scale(zx(f), -1),   // vo per amp drawn from the output
     zeros: ssZeros(A, Bd, dc.c, Ed),
+    poly: ssPoly(A, Bd, dc.c, Ed),          // Gvd = num/den
   };
 }
 
@@ -101,6 +108,7 @@ function dcmPlant(p, D, th) {
     Gvd: f => shape(Gd0, f), Gid: null,
     Gvg: f => shape(M, f), Zout: f => shape(Rz, f),
     zeros: isFinite(wz) ? [Cx.of(-wz)] : [], Gd0,
+    poly: { num: isFinite(wz) ? [Gd0, Gd0 / wz] : [Gd0], den: [1, 1 / wp] },
   };
 }
 

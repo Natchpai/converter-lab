@@ -73,5 +73,56 @@ function runControlTests() {
     check(a.ok && Math.abs(a.D - 5 / 12) < 1e-9 && b.ok && Math.abs(b.D - 0.5) < 1e-9 && !c.ok,
       `D0: buck 5 V -> ${a.D.toFixed(6)}, boost 24 V -> ${b.D.toFixed(6)}, lossy boost 400 V unreachable (max ${c.Vmax.toFixed(1)} V)`);
   }
+  // ---- polynomial roots
+  {
+    const a = polyMul(polyMul([1, 1], [2, 1]), [5, 2, 1]);                 // (s+1)(s+2)(s²+2s+5)
+    const b = polyMul([1e4, 1], [2e5, 1]);                                   // (s+1e4)(s+2e5)
+    const want = [[-1, 0], [-2, 0], [-1, 2], [-1, -2]], want2 = [[-1e4, 0], [-2e5, 0]];
+    const near = (rs, ws) => ws.every(([re, im]) => rs.some(r => Math.hypot(r.re - re, r.im - im) < 1e-7 * Math.max(1, Math.hypot(re, im))));
+    check(near(polyRoots(a, 1), want) && near(polyRoots(b, 1e5), want2), 'polyRoots: (s+1)(s+2)(s²+2s+5) and (s+1e4)(s+2e5)');
+  }
+  // ---- k-factor design hits the target fc and PM
+  const cfgOf = (comp, Vt) => ({ mode: 'vmc', Vt, Vref: VREF, Vm: 1, Dmax: 0.9, comp, R1: 10e3 });
+  const designCase = (name, p, Vt, type, fc, pm) => {
+    const L0 = buildLoop(p, cfgOf({ type: 'P', K: 1 }, Vt));
+    const d = designComp(type, L0.plantK, fc, pm, L0.fmin);
+    const L = buildLoop(p, cfgOf(d.comp, Vt));
+    const expectPm = type === 'P' ? 180 + d.phi : type === 'I' ? 90 + d.phi : pm;
+    const ok = rel(L.m.fc, fc) < 0.01 && Math.abs(L.m.pm - expectPm) < 0.5 && L.stable === (L.m.pm > 0);
+    check(ok, `design ${name} ${COMP_TYPES[type].name}: fc ${fmtSI(L.m.fc, 'Hz')} (want ${fmtSI(fc, 'Hz')}), PM ${L.m.pm.toFixed(2)}° (want ${expectPm.toFixed(2)}°), GM ${L.m.gm.toFixed(1)} dB, ${L.stable ? 'stable' : 'unstable'}`);
+    return { L, d };
+  };
+  const pB = { ...base, ...lossy, topo: 'buck' };
+  designCase('buck', pB, 5, 'T3', 10e3, 60);
+  designCase('buck', pB, 5, 'T2', 10e3, 45);
+  designCase('DCM buck', { ...base, topo: 'buck', R: 100 }, 7, 'PI', 300, 60);
+  designCase('buck', pB, 5, 'I', 100, 60);
+  designCase('boost', { ...base, ...lossy, topo: 'boost', R: 50 }, 24, 'T3', 2e3, 55);
+  designCase('buck-boost', { ...base, ...lossy, topo: 'bb', R: 20 }, 12, 'T3', 2e3, 55);
+  designCase('DCM boost', { ...base, topo: 'boost', R: 500 }, 30, 'T2', 2e3, 60);
+  // ideal buck (no ESR zero) above f0: Type 2 cannot add 90°, so PM < 0 and the poles agree
+  {
+    const p = { ...base, topo: 'buck' }, L0 = buildLoop(p, cfgOf({ type: 'P', K: 1 }, 5));
+    const d = designComp('T2', L0.plantK, 10e3, 60, L0.fmin), L = buildLoop(p, cfgOf(d.comp, 5));
+    check(!L.stable && L.m.pm < 0 && d.notes.length > 0, `stability: ideal buck Type 2 at 10 kHz -> PM ${L.m.pm.toFixed(1)}°, ${L.stable ? 'stable' : 'unstable'} (want unstable)`);
+  }
+  // PI below a resonance that lifts |T| above 0 dB: extra crossover, unstable, warned
+  {
+    const L0 = buildLoop(pB, cfgOf({ type: 'P', K: 1 }, 5));
+    const d = designComp('PI', L0.plantK, 300, 60, L0.fmin), L = buildLoop(pB, cfgOf(d.comp, 5));
+    check(!L.stable && L.m.cross.length > 1 && L.warn.some(w => /crosses 0 dB/.test(w)), `stability: buck PI at 300 Hz -> ${L.m.cross.length} crossovers, last ${fmtSI(L.m.fc, 'Hz')}, ${L.stable ? 'stable' : 'unstable'} (want unstable + warning)`);
+  }
+  // ---- op-amp part values realize H·Gc
+  for (const type of ['P', 'I', 'PI', 'T2', 'T3']) {
+    const L0 = buildLoop(pB, cfgOf({ type: 'P', K: 1 }, 5));
+    const d = designComp(type, L0.plantK, type === 'PI' || type === 'I' ? 300 : 10e3, 50, L0.fmin);
+    const H = VREF / 5, v = opampValues(d.comp, H, 10e3), cn = compNorm(d.comp);
+    let worst = 0;
+    for (const f of [10, 300, 3e3, 3e4, 3e5]) {
+      const want = Cx.scale(compEval(cn, f), H), got = opampEval(v, f);
+      worst = Math.max(worst, Cx.abs(Cx.sub(got, want)) / Cx.abs(want));
+    }
+    check(v.ok && worst < 1e-9, `op-amp ${COMP_TYPES[type].name}: Zf/Zin vs H·Gc worst error ${worst.toExponential(1)}`);
+  }
   return { allPass, lines: out };
 }

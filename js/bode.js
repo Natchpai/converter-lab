@@ -4,12 +4,6 @@
 // Magnitude (top) and phase (bottom) share one log-frequency axis.
 const BODE = { ml: 46, mr: 74, mt: 22, gap: 34, mb: 26, n: 400 };
 
-function logspace(a, b, n) {
-  const out = new Float64Array(n), la = Math.log10(a), lb = Math.log10(b);
-  for (let i = 0; i < n; i++) out[i] = 10 ** (la + (lb - la) * i / (n - 1));
-  return out;
-}
-
 // Sample each curve def { id, name, color (CSS var), H: f -> Cx, dash, width } on a log grid.
 // Phase is unwrapped along frequency so it can go below −180°.
 function bodeSample(fmin, fmax, defs, n = BODE.n) {

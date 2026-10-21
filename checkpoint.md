@@ -19,7 +19,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 1 | Split index.html into css/js files, Node test runner | done |
 | 2 | Page switch scaffold (Converter / Control) | done |
 | 3 | Model hooks, complex helpers, averaged plant, Bode (plant) | done |
-| 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | todo |
+| 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | done |
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | todo |
 | 6 | Peak current-mode control | todo |
 | 7 | Average current-mode control | todo |
@@ -89,6 +89,28 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
   recalled: buck wp = (2−M)/((1−M)RC), boost (2M−1)/((M−1)RC), buck-boost 2/(RC). Gd0 matches
   dVo/dD analytically. wp still to be cross-checked with the period-map model in Phase 5.
 
+### Phase 4: compensators and VMC loop design
+- `js/comp.js`: `COMP_TYPES` (P, I, PI, T2, T3), `compNorm`, `compEval`, `compPoly`,
+  `polyMul/polyAdd/polyRoots` (Durand-Kerner, scaled), `phaseAt`, `loopMargins` (all 0 dB
+  crossings with PM, −180° crossings with GM, conditional flag), `designComp` (k-factor with
+  boost clamp + notes), `opampValues` / `opampEval` (Zf/Zin = H·Gc).
+- `js/loop.js`: `VREF = 2.5`, `plantMarks`, `buildLoop(p, cfg)` (D0, plant, Gc, T, CL,
+  Zout open/closed, margins, closed-loop poles, op-amp values, warnings), `suggestFc`.
+- `logspace` moved to `cplx.js`; plants now carry `poly = { num, den }` of Gvd.
+- Control page: left panel has mode (VMC only for now), Vo* (per topology), VM, Dmax and the
+  operating point; D row hidden. Design panel: compensator type, its sliders (gain in dB too),
+  target fc/PM, Auto design / Suggest fc / Textbook Type 3, loop result (fc, PM, GM, plant
+  frequencies, closed-loop poles), warnings, op-amp SVG + part table (incl. Rbot), tips.
+  Bode: Gvd, Gc (dashed), T, closed loop, closed-loop Zout; zero/pole handles on Gc.
+  A topology change auto-designs with a suggested fc. Scope shows the open-loop waveform at D0.
+- Checks (VERIFIED, Node + headless Edge):
+  k-factor designs hit fc within 1 % and PM within 0.5° (buck T3/T2, DCM buck PI, buck I,
+  boost T3, buck-boost T3, DCM boost T2); pole test agrees with PM sign; ideal buck Type 2
+  above f0 is unstable (as theory says); buck PI below the LC peak gets 3 crossovers, is
+  unstable and warned; op-amp Zf/Zin = H·Gc to 1e-15 for all five types; polyRoots on known
+  polynomials.
+- Screenshots checked: control page dark 1400 px; op-amp SVGs for all five types.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations
@@ -98,6 +120,6 @@ Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
 
 ## Next step
 
-Phase 4: `js/comp.js` (P, I, PI, Type 2, Type 3; k-factor; op-amp R/C), loop gain and
-closed-loop curves, fc/PM/GM, Vo target replaces D on the Control page, VMC control panel
-(Vm, H), op-amp table + SVG.
+Phase 5: `js/simcl.js` closed-loop switching sim for VMC (event-split stepper, Tustin
+compensator, anti-windup, Dmax), events (load step, Vin step, Vref step, soft-start), new scope
+signals (vc, ramp, duty, vref, err), step metrics, debounced recompute, period-map model.

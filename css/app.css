@@ -180,3 +180,21 @@ body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { 
 @media (min-width: 1251px) {
   body[data-page="control"] main.layout { grid-template-columns: 310px minmax(0, 1.4fr) minmax(0, 1fr); }
 }
+
+/* ---- control page panels ---- */
+body[data-page="control"] #row-D { display: none; }
+.ctlBlock { margin: 4px 0 14px; }
+.ctlBlock .seg { margin: 2px 0 10px; flex-wrap: wrap; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; margin: 4px 0 10px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.kv span:nth-child(even) { font-family: ui-monospace, Consolas, monospace; text-align: right; }
+.warnList { margin: 6px 0 10px; padding-left: 18px; color: var(--dcm); font-size: 14px; }
+.warnList li { margin: 3px 0; }
+.okLine { color: var(--ccm); font-size: 14px; font-weight: 600; margin: 6px 0; }
+.btnRow { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.note { font-size: 14px; color: var(--muted); margin: 4px 0 8px; }
+.prow .db { font-size: 13px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; margin-left: 6px; }
+#opampSvg svg { width: 100%; max-width: 560px; height: auto; display: block; }
+.designGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 18px; }
+svg tspan.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; fill: var(--muted); }

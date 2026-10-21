@@ -35,3 +35,10 @@ function quadRoots(a, b, c) {
   const re = -b / (2 * a), im = Math.sqrt(-disc) / (2 * Math.abs(a));
   return [Cx.of(re, im), Cx.of(re, -im)];
 }
+
+// n points from a to b, evenly spaced in log scale.
+function logspace(a, b, n) {
+  const out = new Float64Array(n), la = Math.log10(a), lb = Math.log10(b);
+  for (let i = 0; i < n; i++) out[i] = 10 ** (la + (lb - la) * i / (n - 1));
+  return out;
+}
