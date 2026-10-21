@@ -36,6 +36,11 @@ function runSelfTests() {
   const sPass = Math.abs(rs.met.vo.mean - 24) / 24 < 0.03;
   allPass = allPass && sPass;
   out.push(`${sPass ? 'PASS' : 'FAIL'} startup boost: final Vo=${rs.met.vo.mean.toFixed(3)} V after ${rs.nPer} periods (N=${rs.N})`);
+  if (typeof runControlTests === 'function') {
+    const rc = runControlTests();
+    allPass = allPass && rc.allPass;
+    out.push(...rc.lines);
+  }
   out.unshift(allPass ? 'SELF TEST: ALL PASS' : 'SELF TEST: FAILURES');
   return { allPass, lines: out };
 }

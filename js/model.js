@@ -15,13 +15,14 @@ function effParams() {
 function makeModel(p) {
   const { topo, Vg, D, L, C, R, rc, rL, ron, ron2, Vf, sync } = p;
   const kR = R / (R + rc);
+  const Ix = p.Ix || 0;   // extra current drawn from the output node (small-signal Zout only)
   let vx = 0, vom = 0, iCm = 0, vL = 0, dI = 0, dV = 0;
 
   function core(st, iL, vC) {
     // ifeed: current the topology pushes into the output node (C with ESR, parallel R)
     const ifeed = topo === 'buck' ? iL : (st === OFF ? iL : 0);
-    vom = (vC + rc * ifeed) * kR;
-    iCm = ifeed - vom / R;
+    vom = (vC + rc * (ifeed - Ix)) * kR;
+    iCm = ifeed - vom / R - Ix;
     if (topo === 'buck') {
       vx = st === ON ? Vg - ron * iL : st === OFF ? (sync ? -ron2 * iL : -Vf) : vom;
       vL = vx - vom;
@@ -47,6 +48,9 @@ function makeModel(p) {
     m.ni = st === IDLE ? 0 : iL + h * (a1 + 2 * a2 + 2 * a3 + a4) / 6;
     m.nv = vC + h * (b1 + 2 * b2 + 2 * b3 + b4) / 6;
   };
+  // Derivatives and output (vo magnitude) for one switch state; used by the small-signal plant.
+  m.der = (st, iL, vC) => { der(st, iL, vC); return [dI, dV]; };
+  m.vout = (st, iL, vC) => { core(st, iL, vC); return vom; };
   // In IDLE (async), would the diode start to conduct? (boost at startup: Vin > vo + Vf)
   m.offRises = vC => { core(OFF, 0, vC); return vL > 1e-12; };
   m.sig = function (key, st, iL, vC) {

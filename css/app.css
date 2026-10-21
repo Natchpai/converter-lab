@@ -163,3 +163,20 @@ body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { 
 .design { grid-area: theory; }
 #bodeWrap { position: relative; }
 #bode { width: 100%; display: block; touch-action: none; }
+
+/* ---- Bode plot series colors (categorical slots 1-5, validated light and dark) ---- */
+:root {
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; }
+}
+:root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; }
+.bodeLegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; color: var(--muted); margin: 0 0 6px; }
+.bodeLegend label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--ink); }
+.bodeLegend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
+.bodeLegend i.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px) !important; }
+#bodeInfo { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 2.9em; white-space: pre-wrap; }
+@media (min-width: 1251px) {
+  body[data-page="control"] main.layout { grid-template-columns: 310px minmax(0, 1.4fr) minmax(0, 1fr); }
+}
