@@ -192,5 +192,51 @@ function runControlTests() {
     const lam = Math.max(...pm.eig.map(z => z.re)), wp = -Math.log(lam) * p.fs, wx = dcmPlant(p, 0.5, th).wp;
     check(rel(wp, wx) < 0.05, `period map ${topo} DCM: slow pole ${(wp / TWO_PI).toFixed(2)} Hz vs reduced order ${(wx / TWO_PI).toFixed(2)} Hz (${pc(rel(wp, wx))})`);
   }
+
+  // ---- peak current mode
+  const pcCfg = (comp, Vt, mSe) => ({ ...cfgOf(comp, Vt), mode: 'pcmc', Ri: 0.5, mSe, vcMax: 4 });
+  const pcDesign = (p, Vt, mSe, fc, pm) => {
+    const L0 = buildLoop(p, pcCfg({ type: 'P', K: 1 }, Vt, mSe));
+    return buildLoop(p, pcCfg(designComp('T2', L0.plantK, fc, pm, L0.fmin).comp, Vt, mSe));
+  };
+  // current-loop pole of the period map vs the analytic α = −(Sf − Se)/(Sn + Se)
+  for (const [name, p, Vt] of [['buck', { ...base, topo: 'buck' }, 5], ['boost', { ...base, topo: 'boost', R: 50 }, 24]]) {
+    const pl = buildLoop(p, pcCfg({ type: 'P', K: 1 }, Vt, 0.5)).plant;
+    check(pl.ok && rel(pl.lamC.re, pl.alpha) < 0.02 && Math.abs(pl.lamC.im) < 1e-9,
+      `PCMC ${name} Se = Sf/2: current-loop pole ${pl.lamC.re.toFixed(4)} (period map) vs α ${pl.alpha.toFixed(4)}, D ${pl.D.toFixed(4)}, Qp ${pl.Qp.toFixed(2)}`);
+  }
+  // vc -> vo DC gain of the period map vs the steady state moved by a small step in Vo*
+  {
+    const p = { ...base, ...lossy, topo: 'buck' }, Vt = 5, dV = 0.01, cf = pcCfg({ type: 'P', K: 1 }, Vt, 0.5);
+    const pl = buildLoop(p, cf).plant, N = clamp(stepsPerPeriod(p, 0.3, 400, 4000), 400, 4000);
+    const vcAt = v => pcmcOperatingPoint(p, { ...cf, Vt: v }, pl.Se, solveD0(p, v).D, N).vc;
+    const fd = 2 * dV / (vcAt(Vt + dV) - vcAt(Vt - dV)), g0 = pl.Gvd(fLow).re;
+    check(rel(g0, fd) < 0.02, `PCMC buck: Gvc(0) ${g0.toFixed(3)} (period map) vs dVo/dvc ${fd.toFixed(3)} of the switched steady state (${pc(rel(g0, fd))})`);
+  }
+  // closed loop with an auto-designed Type 2: load step and step back settle to Vo*
+  for (const [name, p, Vt, fc] of [['buck', pB, 5, 10e3], ['boost', { ...base, ...lossy, topo: 'boost', R: 50 }, 24, 2e3]]) {
+    const L = pcDesign(p, Vt, 0.5, fc, 60), sz = clSizes(L, 'auto');
+    const t0 = performance.now();
+    const mt = computeResCL(L, { event: 'load', size: 100, back: true, ...sz }).met, ms = performance.now() - t0;
+    const sA = mt.segs[1], sB = mt.segs[2];
+    const ok = L.stable && rel(L.m.fc, fc) < 0.01 && Math.abs(L.m.pm - 60) < 0.5 && rel(sA.final, Vt) < 0.005 && rel(sB.final, Vt) < 0.005 && sA.settled && sB.settled;
+    check(ok, `PCMC closed loop ${name} Type 2: fc ${fmtSI(L.m.fc, 'Hz')}, PM ${L.m.pm.toFixed(1)}°, load x2 -> ${sA.final.toFixed(4)} V (dip ${fmtSI(sA.under, 'V')}), back -> ${sB.final.toFixed(4)} V, ${sz.nPer}x${sz.N} steps ${ms.toFixed(0)} ms`);
+  }
+  // subharmonic oscillation: buck at D ≈ 0.67, same compensator, Se = 0 vs Se = Sf/2
+  {
+    const p = { ...base, topo: 'buck' }, Vt = 8, comp = pcDesign(p, Vt, 0.5, 2e3, 60).cfg.comp;
+    const alt = mSe => {
+      const L = buildLoop(p, pcCfg(comp, Vt, mSe));
+      const sim = simulateCL(L, { event: 'load', size: 20, back: false, nPer: 200, N: 200, pre: 60 });
+      const r = sim.rec, T = sim.T, edge = [];
+      for (let k = 0, i = 0; k < sim.nPer; k++) { while (i < r.n - 1 && r.t[i] < k * T - 1e-9 * T) i++; edge.push(r.iL[i]); }
+      let a = 0;
+      for (let k = sim.nPer - 20; k < sim.nPer; k++) a = Math.max(a, Math.abs(edge[k] - edge[k - 1]));
+      return { a: a / theory({ ...p, D: L.plant.D }).dIL, L };
+    };
+    const u = alt(0), s = alt(0.5);
+    check(u.a > 0.05 && s.a < 0.005 && Cx.abs(u.L.plant.lamC) > 1 && !u.L.stable && u.L.warn.some(w => /Subharmonic/.test(w)) && s.L.stable,
+      `PCMC subharmonic, buck D ${s.L.plant.D.toFixed(3)}: iL change between clock edges ${(u.a * 100).toFixed(1)} % of ΔiL at Se = 0 (α ${u.L.plant.alpha.toFixed(2)}), ${(s.a * 100).toFixed(4)} % at Se = Sf/2`);
+  }
   return { allPass, lines: out };
 }

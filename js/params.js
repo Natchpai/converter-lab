@@ -23,7 +23,7 @@ const SIGNALS = [
 // Extra signals that exist only in the closed-loop simulation (Control page).
 const CL_SIGNALS = [
   { k: 'vc',    n: 'vc',    u: 'V', d: 'Control voltage (compensator output)' },
-  { k: 'ramp',  n: 'ramp',  u: 'V', d: 'PWM ramp compared with vc' },
+  { k: 'ramp',  n: 'ramp',  u: 'V', d: 'Signal compared with vc (VMC: PWM ramp, PCMC: Ri·iL + Se·t)' },
   { k: 'duty',  n: 'duty',  u: '',  d: 'Duty cycle of each period' },
   { k: 'vref',  n: 'vref',  u: 'V', d: 'Reference voltage' },
   { k: 'vfb',   n: 'vfb',   u: 'V', d: 'Feedback H·|vo|' },

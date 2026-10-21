@@ -21,7 +21,7 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
 | 3 | Model hooks, complex helpers, averaged plant, Bode (plant) | done |
 | 4 | Compensators, loop gain, fc/PM/GM, k-factor, op-amp values, VMC controls | done |
 | 5 | Closed-loop switching sim (VMC), events, step metrics, period-map model | done |
-| 6 | Peak current-mode control | in progress (math done, UI and tests not yet) |
+| 6 | Peak current-mode control | done |
 | 7 | Average current-mode control | todo |
 | 8 | FRA from the switching sim | todo |
 | 9 | Drag poles/zeros, tips, DCM notes, polish | todo |
@@ -139,8 +139,8 @@ op-amp R/C values; drag poles/zeros on the Bode plot.
   boost CCM); DCM slow pole from the period map = derived reduced-order wp within 0.02 %.
 - Performance: closed-loop run ~150-190 ms in Node for 200x300 / 1000x94 steps.
 
-### Phase 6 (in progress): peak current-mode control
-Done (all existing tests still pass; no PCMC tests yet):
+### Phase 6: peak current-mode control
+Math (simulator, period map, operating point, loop):
 - `simulateCL`: `cfg.mode === 'pcmc'` turn-off rule Ri·iL + Se·(t − tclk) ≥ vc (S turns on at
   every clock, may turn off at once = pulse skip); recorded `ramp` is the comparator input
   Ri·iL + Se·t in PCMC. Options `x0`, `vc0`, `vcLim` start from a given state (period map).
@@ -153,21 +153,42 @@ Done (all existing tests still pass; no PCMC tests yet):
   `L.vcMax`, fmax = fs/2, no Zout curve, no pole polynomial: stability from margins and
   |lamC| < 1), subharmonic / Qp / convergence warnings, `L.plantName`, `L.plantShort`.
 
-To do next (in this order):
-1. `CTL.cfg` in control-ui.js: add `Ri: 0.5, mSe: 0.5, vcMax: 4`. Make the side rows depend
-   on mode (VMC: Vt, Vm, Dmax; PCMC: Vt, Ri, mSe "Slope comp Se/Sf" 0..2, Dmax), rebuild on mode
-   change, enable the "Peak CMC" button in `#ctlMode` (add a click handler: set mode, set comp
-   type T2 for PCMC / T3 for VMC, `autoDesign('suggest')`, rebuild rows, `requestCompute()`).
-   Button "Se = Sf/2".
-2. `renderControl`: use `L.plantName` / `L.plantShort` for the plant curve, skip the Zout
-   curve when `L.Zcl` is null, show Sn, Sf, Se, mc, Qp, α (analytic) and lamC (period map),
-   vc0 in `#ctlOp` for PCMC; `polesText` must handle `L.poles === null`.
-3. Tests in selftest-cl.js: (a) ideal buck CCM: period-map lamC vs α = −(Sf−Se)/(Sn+Se) within
-   2 % for mSe = 0.5; (b) PCMC closed loop (T2 auto design) load step settles to Vo*;
-   (c) subharmonic: buck Vt = 8 V (D ≈ 0.67), mSe = 0 → iL at clock edges alternates
-   > 5 % of ΔiL in the last 20 periods; mSe = 0.5 → < 0.5 %. Use the same compensator for both.
-4. Screenshot the Control page in PCMC, then commit Phase 6 and update this file.
-Later phases (7 ACMC, 8 FRA, 9 drag + polish) as in the plan table.
+- `loop.js`: warning when vc at the operating point is above 0.8·vcMax (current limit acts).
+
+UI (`control-ui.js`):
+- `CTL.cfg` has `Ri: 0.5, mSe: 0.5, vcMax: 4`. `CTL_SIDE` is now a keyed object;
+  `CTL_SIDE_KEYS[mode]` picks the rows (VMC: Vt, Vm, Dmax; PCMC: Vt, Ri, mSe, Dmax).
+  `buildSideRows()` rebuilds `#ctlSideRows`, adds the "Se = Sf/2" button in PCMC and hides
+  "Textbook Type 3" (VMC only).
+- `#ctlMode` click: set mode, Type 2 for PCMC / Type 3 for VMC, `autoDesign('suggest')`,
+  rebuild rows. Avg CMC button still disabled.
+- `renderControl`: plant curve named from `L.plantName/plantShort`, curves with no `H` (Zout in
+  PCMC) are dropped. `#ctlOp` (PCMC): switched D, H, vc0. Loop result (PCMC): Sn, Sf, Se, mc,
+  Qp (shows "–" when mc·D′ ≤ 0.5), analytic α, period-map pole, averaged D0. No pole list.
+- PCMC tips (`pcmcTips`), op-amp SVG says "to current comparator", Bode hint text per mode.
+- `?mode=pcmc` URL query (clicks the mode button at start; for screenshots).
+- `CL_SIGNALS.ramp` description covers both modes.
+
+Tests (`selftest-cl.js`, all VERIFIED in Node and headless Chrome):
+- period-map current-loop pole vs α at Se = Sf/2: buck −0.2633 vs −0.2632, boost −0.3334 vs
+  −0.3333 (plan bound 2 %).
+- Gvc(0) of the period map vs dVo/dvc from two PCMC operating points (Vo* ± 10 mV), lossy
+  buck: 0.001 % (plan bound 2 %).
+- closed loop, auto-designed Type 2: buck fc 10 kHz and boost fc 2 kHz, PM 60.0°, load x2 and
+  back settle to Vo* within 0.5 %.
+- subharmonic, ideal buck Vo* = 8 V (D = 0.667), same compensator: iL change between clock
+  edges 200 % of ΔiL at Se = 0 (α = −2, warned, unstable), 0.0033 % at Se = Sf/2. The Se = 0
+  number differs a little between engines (Node 200.4 %, Chrome 206.9 %): it is an unstable
+  limit cycle, so float differences grow. Bounds (> 5 %, < 0.5 %) hold in both.
+
+Test tooling (`tests/browser.js`): Edge 155 now returns an empty `--dump-dom` (screenshots
+still work). `selftest` tries each installed browser until one returns a DOM (Chrome here) and
+prints the browser name on stderr. Each call gets a fresh profile (a second browser on a
+profile that Edge still locks exits with status 21); cleanup no longer throws on a locked dir.
+
+Screenshots checked: Control page PCMC dark and light at 1400 px, PCMC at 520 px, VMC dark
+1400 px (unchanged). NOT_VERIFIED: switching PCMC → VMC by hand in a real browser (the
+VMC → PCMC click path runs at start with `?mode=pcmc`).
 
 ## Formula notes
 
@@ -178,4 +199,6 @@ Ch. 11/12, Ridley 1991 or TI SLUA079 in `refs/` would allow confirming the rest.
 
 ## Next step
 
-Finish Phase 6 with the numbered list in "Phase 6 (in progress)" above.
+Phase 7, average current-mode control (plan section 2 "ACMC" and the Phase 7 check row):
+two compensators (Gci inner, Gcv outer), inner/outer Bode toggle, slope-rule warning.
+`node tests/browser.js selftest` uses Chrome while Edge's `--dump-dom` is broken.

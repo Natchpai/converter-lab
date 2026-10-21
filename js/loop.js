@@ -64,6 +64,7 @@ function buildLoop(p, cfg) {
   if (pc && Cx.abs(pl.lamC) >= 1) L.warn.push(`Subharmonic oscillation: the current-loop pole α = ${pl.lamC.re.toFixed(2)} is outside the unit circle (|α| ≥ 1). Raise Se: it must be above (Sf − Sn)/2; Se = Sf/2 works for any D.`);
   else if (pc && pl.Qp > 2) L.warn.push(`Qp = ${pl.Qp.toFixed(1)}: the double pole at fs/2 is sharp, close to subharmonic oscillation. Add slope compensation.`);
   if (pc && !pl.ok) L.warn.push('The peak-current operating point did not converge (duty limit or no steady state).');
+  else if (pc && pl.vc0 > 0.8 * cfg.vcMax) L.warn.push(`v<sub>c</sub> = ${fmtSI(pl.vc0, 'V')} at the operating point is close to its limit ${fmtSI(cfg.vcMax, 'V')}: the current limit will act on steps. Lower R<sub>i</sub>.`);
   if (!L.stable) L.warn.push(pl.poly ? 'Closed loop is UNSTABLE (a closed-loop pole is in the right half plane).' : 'Closed loop is UNSTABLE or has no margin (judged from the margins of the sampled-data loop).');
   else if (L.m.pm < 30) L.warn.push(`Phase margin ${L.m.pm.toFixed(0)}° is low: expect ringing on steps.`);
   if (!isFinite(fc)) L.warn.push('|T| does not cross 0 dB below fs: the loop gain is too high (or too low) for this model.');
