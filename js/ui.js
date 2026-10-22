@@ -141,30 +141,57 @@ function setPage(pg, noCompute) {
 
 /* ---------- printed reports: Design summary, Losses and Control reports ---------- */
 // Fills #printArea and prints. A header row moves into <thead>, so it repeats on every page.
+// Chart pictures (data: URLs) are not loaded yet when they are set; print waits for them,
+// else the browser prints the page without them. printJob is that wait (the UI test reads it).
+let printJob = null;
 function printReport(html) {
   $('#printArea').innerHTML = html;
   for (const t of $('#printArea').querySelectorAll('table')) {
     const r = t.rows[0];
     if (r && r.querySelector('th')) t.createTHead().appendChild(r);
   }
-  window.print();
+  const imgs = [...$('#printArea').querySelectorAll('img')];
+  printJob = null;
+  if (!imgs.length) { window.print(); return; }
+  printJob = Promise.all(imgs.map(i => i.decode().catch(() => {}))).then(() => window.print());
 }
 const reportHead = (title, line) =>
   `<h1>${title}</h1><p>${line} ${new Date().toLocaleString()}. Made with DC-DC Converter Lab.</p>`;
-// Picture of a chart for paper: drawn once at w x h CSS px in the light theme and on the light
-// scope screen (charts read their size and colors when they draw), then drawn again as it was.
+// Draws cv once at w x h CSS px with s device px per CSS px (charts read dpr and their size when
+// they draw), returns take(), then draws it again as it was. undo() runs before that last draw.
+function drawAt(cv, redraw, w, h, s, take, undo) {
+  const d0 = dpr, W0 = cv.width, H0 = cv.height;
+  dpr = s; cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+  redraw();
+  const out = take();
+  if (undo) undo();
+  dpr = d0; cv.width = W0; cv.height = H0;
+  redraw();
+  return out;
+}
+// Picture of a chart for paper: at least 2 px per CSS px, in the light theme and on the light scope screen.
 function lightImage(cv, redraw, w, h) {
   const root = document.documentElement, theme = root.dataset.theme, bg = state.scopeBg;
-  const W0 = cv.width, H0 = cv.height;
   root.dataset.theme = 'light'; state.scopeBg = 'light';
-  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-  redraw();
-  const url = cv.toDataURL('image/png');
-  if (theme) root.dataset.theme = theme; else delete root.dataset.theme;
-  state.scopeBg = bg;
-  cv.width = W0; cv.height = H0;
-  redraw();
-  return url;
+  return drawAt(cv, redraw, w, h, Math.max(2, dpr), () => cv.toDataURL('image/png'), () => {
+    if (theme) root.dataset.theme = theme; else delete root.dataset.theme;
+    state.scopeBg = bg;
+  });
+}
+// PNG button: the chart as shown, at PNG_SCALE px per CSS px (long side at most PNG_MAX px),
+// on the panel color where the chart leaves the background clear.
+const PNG_SCALE = 3, PNG_MAX = 8192;
+function chartPNG(cv, redraw, name) {
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  const s = Math.min(Math.max(PNG_SCALE, dpr), PNG_MAX / Math.max(w, h));
+  drawAt(cv, redraw, w, h, s, () => {
+    const ctx = cv.getContext('2d');
+    ctx.save(); ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim();
+    ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore();
+    cv.toBlob(b => { if (b) download(b, name); });   // the bitmap is copied now, encoded later
+  });
 }
 // .kv grid (label and value spans) or slider rows (.prow) as table rows
 function kvRows(el) {
@@ -485,4 +512,4 @@ function scopeCSV(res) {
 }
 const exportName = () => `dcdc-${state.topo}-${state.page === 'control' ? 'control' : state.view}`;
 $('#csvBtn').addEventListener('click', () => { if (RES) download(new Blob([scopeCSV(RES)], { type: 'text/csv' }), exportName() + '.csv'); });
-$('#pngBtn').addEventListener('click', () => els.scope.toBlob(b => { if (b) download(b, exportName() + '.png'); }));
+$('#pngBtn').addEventListener('click', () => { if (RES) chartPNG(els.scope, renderScope, exportName() + '.png'); });

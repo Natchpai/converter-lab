@@ -204,6 +204,7 @@ function requestLosses() {
 }
 
 // Printed loss report: summary, loss and core tables, then the efficiency chart on page 2.
+$('#effPng').addEventListener('click', () => chartPNG($('#effChart'), drawEff, `dcdc-efficiency-${state.topo}.png`));
 $('#lPrint').addEventListener('click', () => {
   if (!$('#lTbl').rows.length) return;
   const sum = [...$('#lSum').querySelectorAll('div')].map(d => `<tr><td>${d.children[0].innerHTML}</td><td>${d.children[1].innerHTML}</td></tr>`).join('');

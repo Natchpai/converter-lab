@@ -338,8 +338,21 @@ split by section and diffed against the main files; only the extra functions wer
   `applyControlJSON` in `js/control-ui.js`; known keys only, clamped to the slider ranges;
   `CTL.topoKey` is set so a file for another topology keeps its compensator). Bode CSV button
   in the Bode panel (`bodeCSV`, every curve of the current view). UI test 86 checks ALL PASS.
+- High-res PNG: `chartPNG` in `js/ui.js` redraws a chart at 3x its CSS size (global `dpr`
+  set for that one draw, long side at most 8192 px, background filled with `--panel`), then
+  restores it. Used by the scope PNG and the new Bode PNG and efficiency-chart PNG buttons.
+  Bode CSV / PNG sit at the top right of the Bode panel (next to the legend); in the shell the
+  FRA bar is a 2-column grid, so the plot keeps more height. Report pictures are drawn at 2 px
+  per CSS px (`lightImage`, shared `drawAt`).
+- Fix: the Bode plot (and other pictures) could be missing in a printed report. The pictures
+  are data: URLs that are not loaded yet when `window.print()` runs (probe: `complete=false`
+  at print time); `printReport` now waits for `img.decode()` before printing (`printJob`).
+- Checks: Node tests identical apart from run times; UI test 92 checks ALL PASS (new: PNG
+  size 3x the CSS size and opaque corner for scope, Bode and efficiency; print waits until the
+  report pictures are loaded); browser selftest ALL PASS.
 - NOT_VERIFIED: real touch drags, Firefox and Safari rendering of the range slider styles,
-  printing on a real printer and A4 paper, real file dialogs.
+  printing on a real printer and A4 paper (the print-wait fix is checked only with a stubbed
+  `window.print`), real file dialogs.
 
 ## Formula notes
 

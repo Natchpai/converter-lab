@@ -127,7 +127,7 @@
         <div id="lBars" role="list" aria-label="Losses by source, largest first"></div>
       </div>
       <div>
-        <div class="dresHead"><h2>Efficiency vs load</h2><span class="hint" id="eStatus"></span></div>
+        <div class="dresHead"><h2>Efficiency vs load</h2><span class="dresTools"><span class="hint" id="eStatus"></span><button class="btn" id="effPng" title="Download the efficiency chart as a high-resolution PNG (3x the size on screen)">PNG</button></span></div>
         <p class="hint">The design at V<sub>in</sub> min, nom and max. D is solved at every point so V<sub>o</sub> stays on target. Hover or tap for values.</p>
         <canvas id="effChart" aria-label="Efficiency versus load for three input voltages"></canvas>
         <div class="legend" id="effLegend"></div>
@@ -196,7 +196,7 @@
       </div>
       <button class="btn chanToggle" id="chanBtn" aria-expanded="false" aria-controls="chanRow" title="Show the channel settings">Channels</button>
       <button class="btn" id="csvBtn" title="Download the enabled channels as CSV">CSV</button>
-      <button class="btn" id="pngBtn" title="Download the scope screen as PNG">PNG</button>
+      <button class="btn" id="pngBtn" title="Download the scope screen as a high-resolution PNG (3x the size on screen)">PNG</button>
     </div>
     <div class="screen" id="screen"><canvas id="scope" aria-label="Oscilloscope screen"></canvas></div>
     <div class="curInfo" id="curInfo"></div>

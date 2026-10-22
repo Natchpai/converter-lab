@@ -34,7 +34,8 @@ or a phone the page scrolls as usual, plots first.
   asynchronous diode or synchronous MOSFET, dead time with body diodes, switch-node
   capacitance that rings in DCM.
 - Scope export as CSV and PNG. The scope screen can be dark (default) or light; light is
-  handy for pictures in reports.
+  handy for pictures in reports. PNG pictures (scope, Bode plot, efficiency chart) are drawn
+  again at 3x the size on screen, so text and lines stay sharp in a report.
 - Printed reports on white paper: the Design summary, a Losses report (loss tables and
   efficiency chart) and a Control report (compensator, loop margins, step response, Bode plot,
   scope and op-amp values). Charts print in the light colors, also from Night theme.
@@ -45,8 +46,8 @@ or a phone the page scrolls as usual, plots first.
 - Op-amp circuits with R/C values: the error amplifier, and the current amplifier in ACMC.
 - Save and load the control design as JSON (mode, compensator, current loop, targets, test
   event and the circuit), and export the Bode curves as CSV (frequency, magnitude and phase of
-  every curve) for MATLAB or a spreadsheet. Both are in the Control page: Loop tab and Bode
-  panel.
+  every curve) for MATLAB or a spreadsheet. Save and load are in the Loop tab of the Control
+  page; the CSV and PNG buttons are at the top right of the Bode panel.
 - Closed-loop switching simulation with load step, input step, reference step and
   soft-start; step-response numbers and extra scope signals (vc, ramp, duty, iref, ...).
 - PCMC with slope compensation and leading-edge blanking (pulses are skipped below the

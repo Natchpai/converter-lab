@@ -660,16 +660,21 @@ function buildFraBar() {
   bar.className = 'fraBar'; bar.id = 'fraBar';
   bar.innerHTML = `<button class="btn" id="fraRun" title="Inject a small sine into the switching simulation at each frequency and measure T and the plant">Measure with FRA</button>
     <label class="ctlInline">Points <select id="fraN">${[8, 15, 25].map(n => `<option value="${n}"${n === 15 ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
-    <button class="btn" id="fraCancel" hidden>Cancel</button><span class="fraMsg" id="fraMsg"></span>
-    <button class="btn" id="bodeCsv" title="Download the Bode curves of this view as CSV (frequency, magnitude, phase)">Bode CSV</button>`;
+    <button class="btn" id="fraCancel" hidden>Cancel</button><span class="fraMsg" id="fraMsg"></span>`;
   CTL.bodeInfo.after(bar);
+  const exp = document.createElement('div');
+  exp.className = 'bodeExport';
+  exp.innerHTML = `<button class="btn" id="bodeCsv" title="Download the Bode curves of this view as CSV (frequency, magnitude, phase)">CSV</button>
+    <button class="btn" id="bodePng" title="Download the Bode plot as a high-resolution PNG (3x the size on screen)">PNG</button>`;
+  CTL.bode.parentElement.before(exp);
   $('#fraRun').addEventListener('click', fraStart);
   $('#fraCancel').addEventListener('click', () => fraStop('Cancelled.'));
+  const bodeName = () => `dcdc-bode-${state.topo}-${CTL.cfg.mode}${CTL.cfg.mode === 'acmc' && CTL.bodeView === 'inner' ? '-current-loop' : ''}`;
   $('#bodeCsv').addEventListener('click', () => {
     const t = bodeCSV(); if (!t) return;
-    const view = CTL.cfg.mode === 'acmc' && CTL.bodeView === 'inner' ? '-current-loop' : '';
-    download(new Blob([t], { type: 'text/csv' }), `dcdc-bode-${state.topo}-${CTL.cfg.mode}${view}.csv`);
+    download(new Blob([t], { type: 'text/csv' }), bodeName() + '.csv');
   });
+  $('#bodePng').addEventListener('click', () => { if (CTL.data) chartPNG(CTL.bode, drawBode, bodeName() + '.png'); });
 }
 
 // Runs one test frequency after the other in slices of about 30 ms, so the page stays live.

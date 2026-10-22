@@ -160,8 +160,14 @@ function runUiTests() {
   });
   // downloads are caught here (no file dialog in the test); PNG comes back async, checked in uiTest()
   uiDownloads.length = 0; uiDownload0 = download; download = (b, n) => uiDownloads.push({ b, n });
+  // PNG button: the picture should be PNG_SCALE x the chart's CSS size (checked in uiTest())
+  const pngClick = (btn, cv) => {
+    const s = Math.max(PNG_SCALE, dpr);
+    uiPngs.push({ btn, w: Math.round(cv.clientWidth * s), h: Math.round(cv.clientHeight * s) });
+    click(btn);
+  };
   step('Scope CSV and PNG buttons', () => {
-    click('#csvBtn'); click('#pngBtn');
+    click('#csvBtn'); pngClick('#pngBtn', els.scope);
     const c = uiDownloads.find(d => /\.csv$/.test(d.n));
     if (!c || c.b.type !== 'text/csv' || c.b.size < 1000) throw new Error('no CSV download');
   });
@@ -249,18 +255,20 @@ function runUiTests() {
     const sel = $('#lSrc'); sel.value = 'sim'; sel.dispatchEvent(new Event('change'));
     if ($('#lWarn').textContent || !/Converter page/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'wrong source');
   });
-  // printed reports: window.print is stubbed; each report has its tables and chart pictures,
-  // and the page theme is the same afterwards
+  // printed reports: each report has its tables and chart pictures, and the page theme is the
+  // same afterwards. Print waits for the pictures; window.print is stubbed until uiTest() checks that.
   const printed = (btn, re, nImg) => {
-    const pr = window.print, theme = document.documentElement.dataset.theme; let n = 0;
-    window.print = () => { n++; };
-    try { click(btn); } finally { window.print = pr; }
+    const theme = document.documentElement.dataset.theme;
+    if (!uiPrint0) { uiPrint0 = window.print; window.print = () => uiPrints.push(1); }
+    click(btn);
     const a = $('#printArea'), imgs = [...a.querySelectorAll('img')];
-    if (n !== 1 || !re.test(a.textContent) || /NaN/.test(a.textContent)) throw new Error(`print ${n}`);
+    if (!printJob || !re.test(a.textContent) || /NaN/.test(a.textContent)) throw new Error('no print job');
+    uiPrintJobs.push(printJob.then(() => imgs.map(i => i.complete && i.naturalWidth > 0)));
     if (imgs.length !== nImg || imgs.some(i => !/^data:image\/png/.test(i.src))) throw new Error(`${imgs.length} pictures`);
     if (document.documentElement.dataset.theme !== theme) throw new Error('theme not restored');
   };
   step('Losses print report', () => printed('#lPrint', /loss report/, 1));
+  step('Efficiency PNG button', () => pngClick('#effPng', $('#effChart')));
   step('Control print report', () => {
     click('[data-group="page"] [data-v="control"]');
     printed('#cPrint', /control report/, 2);
@@ -286,25 +294,48 @@ function runUiTests() {
   step('Bode CSV', () => {
     const t = bodeCSV(), rows = t.trim().split('\n'), n = CTL.data.curves.length;
     if (rows[0].split(',').length !== 1 + 2 * n || rows.length !== CTL.data.f.length + 1 || /NaN/.test(t)) throw new Error(`${rows.length} rows, header ${rows[0]}`);
+  });
+  step('Bode PNG button', () => {
+    const w0 = CTL.bode.width;
+    pngClick('#bodePng', CTL.bode);
+    if (CTL.bode.width !== w0) throw new Error('canvas size not restored');
     click('[data-group="page"] [data-v="losses"]');
   });
   window.removeEventListener('error', onErr);
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');
   return { allPass, lines: out };
 }
-const uiDownloads = [];
-let uiDownload0 = null;
+const uiDownloads = [], uiPrints = [], uiPrintJobs = [], uiPngs = [];
+
+let uiDownload0 = null, uiPrint0 = null;
 async function uiTest() {
   const r = runUiTests();
   const add = (pass, text) => { r.allPass = r.allPass && pass; r.lines.push(`${pass ? 'PASS' : 'FAIL'} ${text}`); };
   try {
-    for (let i = 0; i < 60 && !uiDownloads.some(d => /\.png$/.test(d.n)); i++) await new Promise(res => setTimeout(res, 50));   // toBlob is async
+    for (let i = 0; i < 100 && uiDownloads.filter(d => /\.png$/.test(d.n)).length < uiPngs.length; i++) await new Promise(res => setTimeout(res, 50));   // toBlob is async
     const png = uiDownloads.find(d => /\.png$/.test(d.n)), js = uiDownloads.find(d => /\.json$/.test(d.n));
     const j = js ? JSON.parse(await js.b.text()) : null;
     add(!!png && png.b.type === 'image/png' && png.b.size > 1000 && !!j && j.app === 'dcdc-converter-lab' && j.specs && j.comp,
       `downloads: PNG ${png ? png.b.size + ' bytes' : 'missing'}, design JSON ${j ? 'parses' : 'missing'}`);
   } catch (err) { add(false, 'downloads: threw ' + err.message); }
+  // high-res PNG: size, and the background is filled (corner pixel opaque)
+  const pngs = uiDownloads.filter(d => /\.png$/.test(d.n));
+  for (let k = 0; k < uiPngs.length; k++) {
+    const want = uiPngs[k], d = pngs[k];
+    try {
+      const bm = await createImageBitmap(d.b), c = document.createElement('canvas');
+      c.width = bm.width; c.height = bm.height; c.getContext('2d').drawImage(bm, 0, 0);
+      const a = c.getContext('2d').getImageData(1, 1, 1, 1).data[3];
+      add(bm.width === want.w && bm.height === want.h && a === 255, `${want.btn} PNG ${d.n}: ${bm.width} x ${bm.height} (want ${want.w} x ${want.h}), corner alpha ${a}`);
+    } catch (err) { add(false, `${want.btn} PNG: ${d ? 'threw ' + err.message : 'missing'}`); }
+  }
   if (uiDownload0) download = uiDownload0;
+  try {
+    const ok = await Promise.all(uiPrintJobs);
+    add(uiPrints.length === uiPrintJobs.length && ok.length > 0 && ok.every(p => p.length && p.every(Boolean)),
+      `print reports: ${uiPrints.length} printed, pictures loaded at print: ${ok.map(p => p.join('/')).join(', ')}`);
+  } catch (err) { add(false, 'print reports: threw ' + err.message); }
+  if (uiPrint0) window.print = uiPrint0;
   try {
     clearTimeout(lossTimer); lossState.src = 'design'; lossState.effKey = '';
     await runEff();
