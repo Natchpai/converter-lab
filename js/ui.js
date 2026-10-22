@@ -135,7 +135,7 @@ function setPage(pg, noCompute) {
     $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
     state.simPage = pg;
   }
-  buildChannels(); updateNonIdealUI(); showTab(savedTab());
+  buildChannels(); updateNonIdealUI(); showTab(savedTab()); setScopeSplit(scopeSplit());
   if (!noCompute) requestCompute();
 }
 
@@ -147,6 +147,49 @@ function setChanOpen(on, save) {
 }
 $('#chanBtn').addEventListener('click', () => setChanOpen(!$('.scopeWrap').classList.contains('showCh'), true));
 try { setChanOpen(localStorage.getItem('dcdc-ch') === '1'); } catch (e) { /* storage blocked */ }
+
+/* ---------- scope height: drag handle between the scope and the panels below (app shell) ---------- */
+const SPLIT_DEF = { converter: 1.3 / 2.3, control: 0.5 };
+function scopeSplit() {
+  let f = NaN;
+  try { f = parseFloat(localStorage.getItem('dcdc-split-' + state.page)); } catch (e) { /* storage blocked */ }
+  return isFinite(f) ? f : SPLIT_DEF[state.page] || SPLIT_DEF.converter;
+}
+function setScopeSplit(f, save) {
+  f = clamp(f, 0.25, 0.8);
+  const m = $('main.layout');
+  m.style.setProperty('--top', f.toFixed(3) + 'fr');
+  m.style.setProperty('--bot', (1 - f).toFixed(3) + 'fr');
+  $('#scopeSplit').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+  if (save) try { localStorage.setItem('dcdc-split-' + state.page, f.toFixed(3)); } catch (e) { /* storage blocked */ }
+  return f;
+}
+function resetScopeSplit() {
+  try { localStorage.removeItem('dcdc-split-' + state.page); } catch (e) { /* storage blocked */ }
+  setScopeSplit(scopeSplit());
+}
+{
+  const sp = $('#scopeSplit');
+  let drag = null;
+  sp.addEventListener('pointerdown', e => {
+    const top = $('.scopeWrap').getBoundingClientRect();
+    const bot = $(state.page === 'control' ? '#bodePanel' : '.schem').getBoundingClientRect();
+    drag = { y0: top.top, h: top.height + bot.height, f: scopeSplit() };
+    sp.classList.add('drag');
+    try { sp.setPointerCapture(e.pointerId); } catch (_) { /* synthetic event */ }
+    e.preventDefault();
+  });
+  sp.addEventListener('pointermove', e => { if (drag) { drag.f = setScopeSplit((e.clientY - drag.y0) / drag.h); drag.moved = true; } });
+  const end = () => { if (!drag) return; if (drag.moved) setScopeSplit(drag.f, true); drag = null; sp.classList.remove('drag'); };
+  sp.addEventListener('pointerup', end);
+  sp.addEventListener('pointercancel', end);
+  sp.addEventListener('dblclick', resetScopeSplit);
+  sp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault(); setScopeSplit(scopeSplit() + (e.key === 'ArrowDown' ? 0.03 : -0.03), true);
+    } else if (e.key === 'Home') { e.preventDefault(); resetScopeSplit(); }
+  });
+}
 
 /* ---------- inspector tabs (Converter and Control pages) ---------- */
 const TABS = { converter: ['theory', 'meas', 'eq', 'map', 'tips'], control: ['loop', 'meas', 'amp', 'notes'] };

@@ -88,6 +88,7 @@ main.layout {
 .tabPane[hidden] { display: none; }
 #compTitle:empty { display: none; }
 .chanToggle { display: none; }
+.splitter { display: none; }
 .chanToggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 
 .prow { margin: 4px 0 10px; }
@@ -329,10 +330,17 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   }
   main.layout > .panel, main.dlayout > .panel, main.llayout > .panel { min-height: 0; overflow: auto; }
   main.layout {
-    grid-template-columns: 320px minmax(0, 1.2fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
-    grid-template-areas: "ctl scope scope" "ctl schem theory";
+    grid-template-columns: 320px minmax(0, 1.2fr) minmax(0, 1fr); row-gap: 0;
+    grid-template-rows: minmax(0, var(--top, 1.3fr)) 12px minmax(0, var(--bot, 1fr));
+    grid-template-areas: "ctl scope scope" "ctl split split" "ctl schem theory";
   }
+  .splitter { display: block; grid-area: split; cursor: row-resize; touch-action: none; position: relative; }
+  .splitter::after {
+    content: ""; position: absolute; left: 50%; top: 4px; width: 44px; height: 4px; margin-left: -22px;
+    border-radius: 2px; background: var(--line); transition: background .12s;
+  }
+  .splitter:hover::after, .splitter:focus-visible::after, .splitter.drag::after { background: var(--accent); }
+  .splitter:focus-visible { outline: none; }
   body[data-page="control"] main.layout { grid-template-columns: 320px minmax(0, 1.4fr) minmax(0, 1fr); }
   .controls { align-self: stretch; }
   .scopeWrap { display: flex; flex-direction: column; }
@@ -341,7 +349,6 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   .scopeWrap .curInfo { margin-top: 6px; font-size: 13px; }
   .chanToggle { display: inline-block; }
   .scopeWrap:not(.showCh) > .chanRow { display: none; }
-  body[data-page="control"] main.layout { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   .bode { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: "legend legend" "wrap wrap" "info fra"; column-gap: 12px; }
   .bode > h2 { display: none; }

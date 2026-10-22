@@ -49,6 +49,8 @@ Se = 0 number is an unstable limit cycle and moves with float-level changes.
 - Converter and Control share one tabbed inspector (`#inspector`, `TABS` and `showTab` in
   `js/ui.js`); tab buttons and panes use `convOnly` / `ctlOnly`. Control results go into the
   panes `#ctlLoop` and `#ctlAmp`; its sliders into `#ctlSide` and `#ctlTrans` (`buildControlUI`).
+- `#scopeSplit` is a drag handle between the scope row and the row below (`setScopeSplit` in
+  `js/ui.js`): it sets `--top` / `--bot` on `main.layout`, saved per page in localStorage.
 - Header option groups never hide: groups that do not apply are disabled in `setPage`
   (`simOpt`, `convOpt`), so the header does not shift between pages.
 - Published on GitHub Pages under a subpath: keep asset paths relative and file names in exact case.

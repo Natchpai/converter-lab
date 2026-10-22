@@ -165,6 +165,13 @@ function runUiTests() {
     const c = uiDownloads.find(d => /\.csv$/.test(d.n));
     if (!c || c.b.type !== 'text/csv' || c.b.size < 1000) throw new Error('no CSV download');
   });
+  step('Scope height handle', () => {
+    const m = $('main.layout'), f0 = scopeSplit();
+    setScopeSplit(0.7);
+    if (m.style.getPropertyValue('--top') !== '0.700fr' || m.style.getPropertyValue('--bot') !== '0.300fr') throw new Error('rows not set');
+    if (setScopeSplit(0.95) !== 0.8) throw new Error('no clamp at 0.8');
+    setScopeSplit(f0);
+  });
   step('Design save and load JSON', () => {
     click('[data-group="page"] [data-v="design"]');
     click('#dSave');
