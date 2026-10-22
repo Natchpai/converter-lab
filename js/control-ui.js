@@ -3,7 +3,7 @@
 /* ================= control page ================= */
 // All control-page UI state lives in CTL, so names do not clash with the converter page.
 const CTL = {
-  bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'), design: $('#designBody'),
+  bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'),
   hoverF: null, data: null, geo: null, L: null, notes: [], topoKey: null,
   bodeView: 'outer',                      // ACMC: 'outer' voltage loop or 'inner' current loop
   fra: null, curKey: '',                  // last FRA run and the settings it belongs to
@@ -165,7 +165,7 @@ function buildSideRows() {
   const md = CTL.cfg.mode;
   $('#btnTextbook').hidden = md !== 'vmc';  // the textbook Type 3 placement is for the LC plant (VMC)
   $('#ciBlock').hidden = md !== 'acmc';
-  $('#compTitle').innerHTML = md === 'acmc' ? 'Voltage loop: compensator G<sub>cv</sub>' : 'Compensator';
+  $('#compTitle').innerHTML = md === 'acmc' ? 'Voltage loop: compensator G<sub>cv</sub>' : '';
 }
 
 function buildCompRows() {
@@ -202,51 +202,63 @@ function requestControlRender() {
 
 function buildControlUI() {
   CTL.side.innerHTML = `
-    <h2>Control</h2>
-    <div class="ctlBlock">
+    <details class="sec" open>
+      <summary>Control</summary>
       <div class="seg small" id="ctlMode" role="group" aria-label="Control mode">
         <button data-m="vmc" title="Voltage-mode control">VMC</button><button data-m="pcmc" title="Peak current-mode control with slope compensation">Peak CMC</button><button data-m="acmc" title="Average current-mode control: current amplifier inside, voltage loop outside">Avg CMC</button>
       </div>
       <div id="ctlSideRows"></div>
       <div class="kv" id="ctlOp"></div>
-    </div>
-    <h2>Transient test</h2>
-    <div class="ctlBlock">
+    </details>
+    <details class="sec" open>
+      <summary>Compensator</summary>
+      <div id="ciBlock" hidden>
+        <h3>Current loop: amplifier G<sub>ci</sub></h3>
+        <div class="seg small" id="ciType" role="group" aria-label="Current amplifier type">
+          ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
+        </div>
+        <div id="ciRows"></div>
+        ${rowsHTML('cti', CTL_TARGET_I)}
+        <p class="note">Auto design (below) designs the current loop first, then the voltage loop with the current loop closed.</p>
+      </div>
+      <h3 id="compTitle"></h3>
+      <div class="seg small" id="compType" role="group" aria-label="Compensator type">
+        ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
+      </div>
+      <div id="compRows"></div>
+    </details>
+    <details class="sec" open>
+      <summary>Design helper</summary>
+      ${rowsHTML('ct', CTL_TARGET)}
+      <div class="btnRow">
+        <button class="btn primary" id="btnAuto" title="Venable k-factor: place zeros and poles for the target fc and PM">Auto design (k-factor)</button>
+        <button class="btn" id="btnSuggest" title="fs/10, and below fRHP/5 when there is an RHP zero">Suggest f<sub>c</sub></button>
+        <button class="btn" id="btnTextbook" title="Type 3 zeros at f0, poles at fESR and fs/2">Textbook Type 3</button>
+      </div>
+      <p class="note" id="designNotes"></p>
+    </details>`;
+  $('#ctlTrans').innerHTML = `
+    <details class="sec" open>
+      <summary>Transient test</summary>
       <label class="ctlInline trEv">Event <select id="trEvent">${Object.entries(CL_EVENTS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select></label>
       ${rowsHTML('tr', CTL_TR)}
       <label class="ctlInline"><input type="checkbox" id="trBack" checked> Step back later</label>
       <label class="ctlInline" style="margin-left:12px">Length <select id="trLen">${['auto', 100, 200, 500, 1000, 2000, 3000].map(v => `<option value="${v}">${v === 'auto' ? 'Auto' : v + ' periods'}</option>`).join('')}</select></label>
-    </div>`;
-  CTL.design.innerHTML = `
-    <div id="ciBlock" hidden>
-      <h3>Current loop: amplifier G<sub>ci</sub></h3>
-      <div class="seg small" id="ciType" role="group" aria-label="Current amplifier type">
-        ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
-      </div>
-      <div id="ciRows"></div>
-      ${rowsHTML('cti', CTL_TARGET_I)}
-      <p class="note">Auto design (below) designs the current loop first, then the voltage loop with the current loop closed.</p>
-    </div>
-    <h3 id="compTitle">Compensator</h3>
-    <div class="seg small" id="compType" role="group" aria-label="Compensator type">
-      ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
-    </div>
-    <div id="compRows"></div>
-    <h3>Design helper</h3>
-    ${rowsHTML('ct', CTL_TARGET)}
+    </details>`;
+  $('#ctlLoop').innerHTML = `
     <div class="btnRow">
-      <button class="btn primary" id="btnAuto" title="Venable k-factor: place zeros and poles for the target fc and PM">Auto design (k-factor)</button>
-      <button class="btn" id="btnSuggest" title="fs/10, and below fRHP/5 when there is an RHP zero">Suggest f<sub>c</sub></button>
-      <button class="btn" id="btnTextbook" title="Type 3 zeros at f0, poles at fESR and fs/2">Textbook Type 3</button>
+      <button class="btn" id="cPrint" title="Print the loop design, Bode plot and step response">Print report</button>
+      <button class="btn" id="cSave" title="Save the control design and the circuit as a JSON file">Save design (JSON)</button>
+      <button class="btn" id="cLoadBtn" title="Load a control design saved from this page">Load design</button>
+      <input type="file" id="cLoad" accept=".json,application/json" hidden>
     </div>
-    <p class="note" id="designNotes"></p>
-    <h3>Loop result</h3>
+    <p class="warn" id="ctlFileMsg"></p>
     <div id="loopOk"></div>
     <div class="kv" id="loopKv"></div>
     <ul class="warnList" id="loopWarn"></ul>
     <h3>Step response (switching simulation)</h3>
-    <div class="kv" id="stepKv"></div>
-    <h3>Error amplifier circuit</h3>
+    <div class="kv" id="stepKv"></div>`;
+  $('#ctlAmp').innerHTML = `
     ${rowsHTML('co', CTL_OPAMP)}
     <div id="opampSvg"></div>
     <div class="tblWrap"><table class="data" id="opampTbl"></table></div>
@@ -257,9 +269,7 @@ function buildControlUI() {
       <p class="note">Z<sub>f</sub>/Z<sub>in</sub> = G<sub>ci</sub>. With i<sub>ref</sub> on the + input the output is
         v<sub>c</sub> = G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>) + i<sub>ref</sub>: the current loop is exact, the extra
         i<sub>ref</sub> is small where |G<sub>ci</sub>| ≫ 1 (the simulation uses G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>)).</p>
-    </div>
-    <h3>What to look at</h3>
-    <ul class="tips" id="ctlTips"></ul>`;
+    </div>`;
   bindRows('ct', CTL_TARGET, tgtGet, tgtSet, ctlChanged);
   bindRows('co', CTL_OPAMP, k => CTL.cfg[k], (k, v) => { CTL.cfg[k] = v; }, ctlChanged);
   bindRows('cti', CTL_TARGET_I, tgtGet, tgtSet, ctlChanged);
@@ -295,6 +305,15 @@ function buildControlUI() {
     buildCompRows(); autoDesign(); updateCtlSegs(); ctlChanged(null, true);
   });
   $('#btnAuto').addEventListener('click', () => { autoDesign(); ctlChanged(null, true); });
+  $('#cPrint').addEventListener('click', printControlReport);
+  $('#cSave').addEventListener('click', () => download(new Blob([JSON.stringify(controlJSON(), null, 2)], { type: 'application/json' }), `dcdc-control-${state.topo}-${CTL.cfg.mode}.json`));
+  $('#cLoadBtn').addEventListener('click', () => $('#cLoad').click());
+  $('#cLoad').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { applyControlJSON(JSON.parse(await f.text())); $('#ctlFileMsg').textContent = `Loaded ${f.name}.`; }
+    catch (err) { $('#ctlFileMsg').textContent = `Could not load the file: ${err.message}`; }
+    e.target.value = '';
+  });
   $('#btnSuggest').addEventListener('click', () => { autoDesign('suggest'); ctlChanged(null, true); });
   $('#btnTextbook').addEventListener('click', () => {
     CTL.cfg.comp.type = 'T3'; buildCompRows(); autoDesign('textbook'); updateCtlSegs(); ctlChanged(null, true);
@@ -490,7 +509,7 @@ function polesText(poles) {
   return out.join(', ') || '–';
 }
 
-function sizeBode() { sizeCanvas(CTL.bode, 420); }
+function sizeBode() { sizeCanvas(CTL.bode, SHELL.matches ? Math.max(120, CTL.bode.parentElement.clientHeight) : 420); }
 function drawBode() {
   if (!CTL.data || !CTL.L) return;
   for (const c of CTL.data.curves) c.hidden = !CTL.show[c.id];
@@ -643,8 +662,19 @@ function buildFraBar() {
     <label class="ctlInline">Points <select id="fraN">${[8, 15, 25].map(n => `<option value="${n}"${n === 15 ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
     <button class="btn" id="fraCancel" hidden>Cancel</button><span class="fraMsg" id="fraMsg"></span>`;
   CTL.bodeInfo.after(bar);
+  const exp = document.createElement('div');
+  exp.className = 'bodeExport';
+  exp.innerHTML = `<button class="btn" id="bodeCsv" title="Download the Bode curves of this view as CSV (frequency, magnitude, phase)">CSV</button>
+    <button class="btn" id="bodePng" title="Download the Bode plot as a high-resolution PNG (3x the size on screen)">PNG</button>`;
+  CTL.bode.parentElement.before(exp);
   $('#fraRun').addEventListener('click', fraStart);
   $('#fraCancel').addEventListener('click', () => fraStop('Cancelled.'));
+  const bodeName = () => `dcdc-bode-${state.topo}-${CTL.cfg.mode}${CTL.cfg.mode === 'acmc' && CTL.bodeView === 'inner' ? '-current-loop' : ''}`;
+  $('#bodeCsv').addEventListener('click', () => {
+    const t = bodeCSV(); if (!t) return;
+    download(new Blob([t], { type: 'text/csv' }), bodeName() + '.csv');
+  });
+  $('#bodePng').addEventListener('click', () => { if (CTL.data) chartPNG(CTL.bode, drawBode, bodeName() + '.png'); });
 }
 
 // Runs one test frequency after the other in slices of about 30 ms, so the page stays live.
@@ -724,4 +754,80 @@ function dragTo(e) {
   d.hc.cfg[d.h.key] = +clamp(v, def.min, def.max).toPrecision(4);
   syncRows(d.hc.pre, compDefs(d.hc.cfg), d.hc.get);
   ctlChanged(d.h.key, false);
+}
+
+// Printed control report: setup, operating point, compensator, loop and step results, then the
+// Bode plot and the scope, then the op-amp values.
+const CTL_MODE_NAME = { vmc: 'voltage-mode control (VMC)', pcmc: 'peak current-mode control (PCMC)', acmc: 'average current-mode control (ACMC)' };
+function printControlReport() {
+  const p = state.p, md = CTL.cfg.mode, acmc = md === 'acmc';
+  const setup = `${TOPO_LABEL[state.topo]}, ${state.sync ? 'synchronous' : 'diode'} rectifier, ${CTL_MODE_NAME[md]}. ` +
+    `V<sub>in</sub> = ${fmtSI(p.Vg, 'V')}, L = ${fmtSI(p.L, 'H')}, C = ${fmtSI(p.C, 'F')}, R = ${fmtSI(p.R, 'Ω')}, f<sub>s</sub> = ${fmtSI(p.fs, 'Hz')}.`;
+  const warn = [...$('#loopWarn').children].map(li => `<li>${li.innerHTML}</li>`).join('');
+  printReport(reportHead('DC-DC converter control report', setup) +
+    `<h2>Operating point and modulator</h2><table>${kvRows($('#ctlOp'))}${sliderRows('#ctlSideRows')}</table>` +
+    (acmc ? `<h2>Current loop: amplifier G<sub>ci</sub></h2><table><tr><td>Type</td><td>${COMP_TYPES[CTL.cfg.ci.type].name}</td></tr>${sliderRows('#ciRows')}</table>` : '') +
+    `<h2>${acmc ? 'Voltage loop: compensator G<sub>cv</sub>' : 'Compensator'}</h2>` +
+    `<table><tr><td>Type</td><td>${COMP_TYPES[CTL.cfg.comp.type].name}</td></tr>${sliderRows('#compRows')}</table>` +
+    `<h2>Loop result</h2><p>${$('#loopOk').textContent}</p><table>${kvRows($('#loopKv'))}</table>` + (warn ? `<ul>${warn}</ul>` : '') +
+    `<div class="keep"><h2>Step response: ${CL_EVENTS[CTL.tr.event].name}</h2><table>${kvRows($('#stepKv'))}</table></div>` +
+    `<h2>Bode plot</h2><img alt="Bode plot" src="${lightImage(CTL.bode, drawBode, 1000, 560)}">` +
+    `<h2>Scope</h2><img alt="Scope screen" src="${lightImage(els.scope, renderScope, 1000, 420)}">` +
+    `<div class="keep"><h2>Error amplifier</h2><table>${$('#opampTbl').innerHTML}</table></div>` +
+    (acmc ? `<div class="keep"><h2>Current amplifier</h2><table>${$('#opampTblI').innerHTML}</table></div>` : ''));
+}
+
+/* ---------- control design file (JSON) and Bode data (CSV) ---------- */
+function controlJSON() {
+  return {
+    app: 'dcdc-converter-lab', kind: 'control', version: 1, saved: new Date().toISOString(),
+    topo: state.topo, sync: state.sync, nonideal: state.nonideal, p: state.p,
+    ctl: { cfg: CTL.cfg, tr: CTL.tr, show: CTL.show, bodeView: CTL.bodeView },
+  };
+}
+// Takes only known keys, each checked for type and range, then rebuilds the page like a
+// topology or mode change, without the fresh auto design that a new topology starts.
+function applyControlJSON(j) {
+  if (!j || j.app !== 'dcdc-converter-lab') throw new Error('this is not a DC-DC Converter Lab file');
+  if (j.kind !== 'control') throw new Error('this is a Design file; load it on the Design page');
+  const num = v => typeof v === 'number' && isFinite(v), pos = v => num(v) && v > 0;
+  const c = (j.ctl && j.ctl.cfg) || {}, cfg = CTL.cfg;
+  if (['buck', 'boost', 'bb'].includes(j.topo)) state.topo = j.topo;
+  if (typeof j.sync === 'boolean') state.sync = j.sync;
+  if (typeof j.nonideal === 'boolean') state.nonideal = j.nonideal;
+  if (j.p) for (const k in PDEF) if (num(j.p[k])) state.p[k] = clamp(j.p[k], PDEF[k].min, PDEF[k].max);
+  if (['vmc', 'pcmc', 'acmc'].includes(c.mode)) cfg.mode = c.mode;
+  if (c.Vt) for (const t of ['buck', 'boost', 'bb']) if (pos(c.Vt[t])) cfg.Vt[t] = clamp(c.Vt[t], CTL_SIDE.Vt.min, CTL_SIDE.Vt.max);
+  for (const k in CTL_SIDE) if (k !== 'Vt' && num(c[k])) cfg[k] = clamp(c[k], CTL_SIDE[k].min, CTL_SIDE[k].max);
+  for (const d of [...CTL_TARGET, ...CTL_TARGET_I, ...CTL_OPAMP]) if (num(c[d.k])) cfg[d.k] = clamp(c[d.k], d.min, d.max);
+  if (pos(c.vcMax)) cfg.vcMax = c.vcMax;
+  for (const a of ['comp', 'ci']) {
+    const src = c[a]; if (!src) continue;
+    if (COMP_TYPES[src.type]) cfg[a].type = src.type;
+    for (const k of ['K', 'fi', 'fz1', 'fz2', 'fp1', 'fp2']) if (pos(src[k])) cfg[a][k] = src[k];
+  }
+  const tr = (j.ctl && j.ctl.tr) || {};
+  if (CL_EVENTS[tr.event]) CTL.tr.event = tr.event;
+  if (tr.size) for (const k in CTL.tr.size) if (num(tr.size[k])) CTL.tr.size[k] = tr.size[k];
+  if (typeof tr.back === 'boolean') CTL.tr.back = tr.back;
+  if ([...$('#trLen').options].some(o => o.value === String(tr.nPer))) CTL.tr.nPer = String(tr.nPer);
+  const show = j.ctl && j.ctl.show;
+  if (show) for (const k in CTL.show) if (typeof show[k] === 'boolean') CTL.show[k] = show[k];
+  if (j.ctl && ['outer', 'inner'].includes(j.ctl.bodeView)) CTL.bodeView = j.ctl.bodeView;
+  CTL.topoKey = state.topo; CTL.fra = null;
+  buildSchem(); syncAllParams(); updateSegs(); updateNonIdealUI(); buildSpecUI(); buildCompUI(); requestDesign();
+  buildSideRows(); buildCompRows(); buildCiRows();
+  syncRows('ct', CTL_TARGET, tgtGet); syncRows('cti', CTL_TARGET_I, tgtGet); syncRows('co', CTL_OPAMP, k => CTL.cfg[k]);
+  syncRows('tr', CTL_TR, () => CTL.tr.size[CTL.tr.event]);
+  $('#trEvent').value = CTL.tr.event; $('#trBack').checked = CTL.tr.back; $('#trLen').value = CTL.tr.nPer;
+  updateTrUI(); updateCtlSegs();
+  ctlChanged(null, true);
+}
+// Bode curves of the current view: frequency, then magnitude (dB) and phase (deg) per curve.
+function bodeCSV() {
+  const d = CTL.data; if (!d) return '';
+  const q = s => `"${String(s).replace(/<[^>]+>/g, '').replace(/"/g, "'")}"`;
+  const lines = ['f (Hz),' + d.curves.map(c => `${q(c.short + ' mag (dB)')},${q(c.short + ' phase (deg)')}`).join(',')];
+  for (let i = 0; i < d.f.length; i++) lines.push(d.f[i].toPrecision(7) + ',' + d.curves.map(c => `${c.mag[i].toPrecision(7)},${c.ph[i].toPrecision(7)}`).join(','));
+  return lines.join('\n') + '\n';
 }

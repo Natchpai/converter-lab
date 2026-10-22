@@ -160,10 +160,69 @@ function runUiTests() {
   });
   // downloads are caught here (no file dialog in the test); PNG comes back async, checked in uiTest()
   uiDownloads.length = 0; uiDownload0 = download; download = (b, n) => uiDownloads.push({ b, n });
+  // PNG button: the picture should be PNG_SCALE x the chart's CSS size (checked in uiTest())
+  const pngClick = (btn, cv) => {
+    const s = Math.max(PNG_SCALE, dpr);
+    uiPngs.push({ btn, w: Math.round(cv.clientWidth * s), h: Math.round(cv.clientHeight * s) });
+    click(btn);
+  };
   step('Scope CSV and PNG buttons', () => {
-    click('#csvBtn'); click('#pngBtn');
+    click('#csvBtn'); pngClick('#pngBtn', els.scope);
     const c = uiDownloads.find(d => /\.csv$/.test(d.n));
     if (!c || c.b.type !== 'text/csv' || c.b.size < 1000) throw new Error('no CSV download');
+  });
+  step('Panel handles', () => {
+    const m = $('#page-sim'), f0 = scopeSplit(), c0 = colSplit(), w0 = sideWidth(m);
+    setScopeSplit(0.7);
+    if (m.style.getPropertyValue('--top') !== '0.700fr' || m.style.getPropertyValue('--bot') !== '0.300fr') throw new Error('rows not set');
+    if (setScopeSplit(0.95) !== 0.8) throw new Error('no clamp at 0.8');
+    setColSplit(0.6);
+    if (m.style.getPropertyValue('--cl') !== '0.600fr' || m.style.getPropertyValue('--cr') !== '0.400fr') throw new Error('columns not set');
+    if (setColSplit(0.9) !== 0.75) throw new Error('no clamp at 0.75');
+    if (setSideWidth(m, 100) !== 240 || m.style.getPropertyValue('--side') !== '240px') throw new Error('sidebar not clamped at 240 px');
+    setScopeSplit(f0); setColSplit(c0); setSideWidth(m, w0);
+  });
+  step('Inspector tabs and Channels button', () => {
+    const shown = () => [...document.querySelectorAll('#inspector [data-pane]')].filter(p => !p.hidden).map(p => p.dataset.pane).join();
+    showTab('map');
+    if (shown() !== 'map') throw new Error(`converter panes shown: ${shown()}`);
+    click('[data-group="page"] [data-v="control"]');
+    showTab('map');
+    if (shown() !== 'loop') throw new Error(`control panes shown: ${shown()}`);
+    click('[data-group="page"] [data-v="converter"]');
+    showTab(savedTab());
+    const sw = $('.scopeWrap'), on0 = sw.classList.contains('showCh');
+    click('#chanBtn');
+    if (sw.classList.contains('showCh') === on0 || $('#chanBtn').getAttribute('aria-expanded') !== String(!on0)) throw new Error('Channels button did not toggle');
+    click('#chanBtn');
+  });
+  step('First-visit guide', () => {
+    let saved = null;
+    try { saved = localStorage.getItem('dcdc-guide'); } catch (e) { /* storage blocked */ }
+    showGuide(true);
+    click('#guide [data-go="losses"]');
+    if (state.page !== 'losses' || !$('#guide [data-go="losses"]').classList.contains('on')) throw new Error('guide step did not open Losses');
+    click('#guide [data-go="converter"]');
+    click('#guideOk');
+    if (!$('#guide').hidden) throw new Error('Got it did not hide the guide');
+    click('#guideBtn');
+    if ($('#guide').hidden) throw new Error('Guide button did not show the guide');
+    try { if (saved === null) localStorage.removeItem('dcdc-guide'); } catch (e) { /* storage blocked */ }
+    showGuide(saved === null);
+  });
+  step('Header groups disabled on Design, sections stay closed', () => {
+    const ni = state.nonideal, topo = state.topo;
+    click('[data-group="page"] [data-v="design"]');
+    if (!$('[data-group="nonideal"] button').disabled || !$('[data-group="view"] button').disabled) throw new Error('Model/View not disabled on Design');
+    click('[data-group="page"] [data-v="converter"]');
+    if ($('[data-group="nonideal"] button').disabled || $('[data-group="view"] button').disabled) throw new Error('Model/View disabled on Converter');
+    click('[data-group="nonideal"] [data-v="1"]');
+    if (!$('#secNonIdeal').open) throw new Error('Non-ideal section not opened');
+    $('#secNonIdeal').open = false;
+    click(`[data-group="topo"] [data-v="${topo === 'boost' ? 'buck' : 'boost'}"]`);
+    if ($('#secNonIdeal').open) throw new Error('Non-ideal section reopened');
+    click(`[data-group="topo"] [data-v="${topo}"]`);
+    click(`[data-group="nonideal"] [data-v="${ni ? 1 : 0}"]`);
   });
   step('Design save and load JSON', () => {
     click('[data-group="page"] [data-v="design"]');
@@ -196,23 +255,87 @@ function runUiTests() {
     const sel = $('#lSrc'); sel.value = 'sim'; sel.dispatchEvent(new Event('change'));
     if ($('#lWarn').textContent || !/Converter page/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'wrong source');
   });
+  // printed reports: each report has its tables and chart pictures, and the page theme is the
+  // same afterwards. Print waits for the pictures; window.print is stubbed until uiTest() checks that.
+  const printed = (btn, re, nImg) => {
+    const theme = document.documentElement.dataset.theme;
+    if (!uiPrint0) { uiPrint0 = window.print; window.print = () => uiPrints.push(1); }
+    click(btn);
+    const a = $('#printArea'), imgs = [...a.querySelectorAll('img')];
+    if (!printJob || !re.test(a.textContent) || /NaN/.test(a.textContent)) throw new Error('no print job');
+    uiPrintJobs.push(printJob.then(() => imgs.map(i => i.complete && i.naturalWidth > 0)));
+    if (imgs.length !== nImg || imgs.some(i => !/^data:image\/png/.test(i.src))) throw new Error(`${imgs.length} pictures`);
+    if (document.documentElement.dataset.theme !== theme) throw new Error('theme not restored');
+  };
+  step('Losses print report', () => printed('#lPrint', /loss report/, 1));
+  step('Efficiency PNG button', () => pngClick('#effPng', $('#effChart')));
+  step('Control print report', () => {
+    click('[data-group="page"] [data-v="control"]');
+    printed('#cPrint', /control report/, 2);
+    if (state.scopeBg !== 'dark') throw new Error('scope screen not restored');
+  });
+  step('Control design save and load', () => {
+    const j = JSON.parse(JSON.stringify(controlJSON())), c0 = JSON.stringify(CTL.cfg), topo0 = state.topo;
+    click('#ctlMode [data-m="' + (CTL.cfg.mode === 'pcmc' ? 'vmc' : 'pcmc') + '"]');
+    applyControlJSON(j);
+    if (JSON.stringify(CTL.cfg) !== c0) throw new Error('settings not restored');
+    for (const k of COMP_TYPES[CTL.cfg.comp.type].keys) if (!$('#cc-sl-' + k)) throw new Error(`no row for ${k}`);
+    let msg = '';
+    try { applyControlJSON({ app: 'dcdc-converter-lab', specs: {} }); } catch (e) { msg = e.message; }
+    if (!/Design page/.test(msg)) throw new Error('a Design file was not rejected');
+    // a file for another topology keeps its compensator (no fresh auto design)
+    const k = JSON.parse(JSON.stringify(j));
+    k.topo = topo0 === 'boost' ? 'buck' : 'boost'; k.ctl.cfg.comp.fz1 = 1234;
+    applyControlJSON(k); compute();
+    if (state.topo !== k.topo || CTL.cfg.comp.fz1 !== 1234) throw new Error(`topology ${state.topo}, fz1 ${CTL.cfg.comp.fz1}`);
+    applyControlJSON(j); compute();
+    if (state.topo !== topo0 || JSON.stringify(CTL.cfg) !== c0) throw new Error('not restored after the topology test');
+  });
+  step('Bode CSV', () => {
+    const t = bodeCSV(), rows = t.trim().split('\n'), n = CTL.data.curves.length;
+    if (rows[0].split(',').length !== 1 + 2 * n || rows.length !== CTL.data.f.length + 1 || /NaN/.test(t)) throw new Error(`${rows.length} rows, header ${rows[0]}`);
+  });
+  step('Bode PNG button', () => {
+    const w0 = CTL.bode.width;
+    pngClick('#bodePng', CTL.bode);
+    if (CTL.bode.width !== w0) throw new Error('canvas size not restored');
+    click('[data-group="page"] [data-v="losses"]');
+  });
   window.removeEventListener('error', onErr);
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');
   return { allPass, lines: out };
 }
-const uiDownloads = [];
-let uiDownload0 = null;
+const uiDownloads = [], uiPrints = [], uiPrintJobs = [], uiPngs = [];
+
+let uiDownload0 = null, uiPrint0 = null;
 async function uiTest() {
   const r = runUiTests();
   const add = (pass, text) => { r.allPass = r.allPass && pass; r.lines.push(`${pass ? 'PASS' : 'FAIL'} ${text}`); };
   try {
-    for (let i = 0; i < 60 && !uiDownloads.some(d => /\.png$/.test(d.n)); i++) await new Promise(res => setTimeout(res, 50));   // toBlob is async
+    for (let i = 0; i < 100 && uiDownloads.filter(d => /\.png$/.test(d.n)).length < uiPngs.length; i++) await new Promise(res => setTimeout(res, 50));   // toBlob is async
     const png = uiDownloads.find(d => /\.png$/.test(d.n)), js = uiDownloads.find(d => /\.json$/.test(d.n));
     const j = js ? JSON.parse(await js.b.text()) : null;
     add(!!png && png.b.type === 'image/png' && png.b.size > 1000 && !!j && j.app === 'dcdc-converter-lab' && j.specs && j.comp,
       `downloads: PNG ${png ? png.b.size + ' bytes' : 'missing'}, design JSON ${j ? 'parses' : 'missing'}`);
   } catch (err) { add(false, 'downloads: threw ' + err.message); }
+  // high-res PNG: size, and the background is filled (corner pixel opaque)
+  const pngs = uiDownloads.filter(d => /\.png$/.test(d.n));
+  for (let k = 0; k < uiPngs.length; k++) {
+    const want = uiPngs[k], d = pngs[k];
+    try {
+      const bm = await createImageBitmap(d.b), c = document.createElement('canvas');
+      c.width = bm.width; c.height = bm.height; c.getContext('2d').drawImage(bm, 0, 0);
+      const a = c.getContext('2d').getImageData(1, 1, 1, 1).data[3];
+      add(bm.width === want.w && bm.height === want.h && a === 255, `${want.btn} PNG ${d.n}: ${bm.width} x ${bm.height} (want ${want.w} x ${want.h}), corner alpha ${a}`);
+    } catch (err) { add(false, `${want.btn} PNG: ${d ? 'threw ' + err.message : 'missing'}`); }
+  }
   if (uiDownload0) download = uiDownload0;
+  try {
+    const ok = await Promise.all(uiPrintJobs);
+    add(uiPrints.length === uiPrintJobs.length && ok.length > 0 && ok.every(p => p.length && p.every(Boolean)),
+      `print reports: ${uiPrints.length} printed, pictures loaded at print: ${ok.map(p => p.join('/')).join(', ')}`);
+  } catch (err) { add(false, 'print reports: threw ' + err.message); }
+  if (uiPrint0) window.print = uiPrint0;
   try {
     clearTimeout(lossTimer); lossState.src = 'design'; lossState.effKey = '';
     await runEff();

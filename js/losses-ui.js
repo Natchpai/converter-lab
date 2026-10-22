@@ -202,3 +202,17 @@ function requestLosses() {
   clearTimeout(lossTimer);
   lossTimer = setTimeout(() => { renderLosses(); runEff(); }, 150);
 }
+
+// Printed loss report: summary, loss and core tables, then the efficiency chart on page 2.
+$('#effPng').addEventListener('click', () => chartPNG($('#effChart'), drawEff, `dcdc-efficiency-${state.topo}.png`));
+$('#lPrint').addEventListener('click', () => {
+  if (!$('#lTbl').rows.length) return;
+  const sum = [...$('#lSum').querySelectorAll('div')].map(d => `<tr><td>${d.children[0].innerHTML}</td><td>${d.children[1].innerHTML}</td></tr>`).join('');
+  const note = $('#lSum p');
+  printReport(reportHead('DC-DC converter loss report', note ? note.innerHTML : '') +
+    `<h2>Summary</h2><table>${sum}</table>` +
+    `<h2>Losses</h2><table>${$('#lTbl').innerHTML}</table>` +
+    `<h2>Inductor core</h2><table>${$('#lCoreTbl').innerHTML}</table>` +
+    `<h2 class="newPage">Efficiency vs load</h2><img alt="Efficiency versus load" src="${lightImage($('#effChart'), drawEff, 1000, 420)}">` +
+    `<table>${$('#effTbl').innerHTML}</table>`);
+});

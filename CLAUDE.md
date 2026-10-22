@@ -39,6 +39,27 @@ Se = 0 number is an unstable limit cycle and moves with float-level changes.
   loaded in `state.ch`. `compute()`, `renderAll()`, `renderLiveNow()` run only on those two
   (`onSimPage()`); Design and Losses render through `requestDesign()` / `requestLosses()`.
 
+## Page layout
+
+- App shell (`css/app.css`, last block): at >= 1100x600 px the page fits the window; every page
+  is a sidebar (inputs, collapsible `details.sec`) plus a workspace, each scrolling on its own.
+  Smaller windows use normal page scroll. `SHELL` (`js/ui.js`) is the same media query in JS.
+- In the shell the scope and Bode canvases take their height from the layout (`resize()`,
+  `sizeBode()`); outside it they keep the width-based / fixed heights.
+- Converter and Control share one tabbed inspector (`#inspector`, `TABS` and `showTab` in
+  `js/ui.js`); tab buttons and panes use `convOnly` / `ctlOnly`. Control results go into the
+  panes `#ctlLoop` and `#ctlAmp`; its sliders into `#ctlSide` and `#ctlTrans` (`buildControlUI`).
+- Drag handles (`.splitter`, `bindSplitter` in `js/ui.js`) set CSS variables on the page's
+  `main`: `#scopeSplit` scope height (`--top`/`--bot`, per page), `#colSplit` bottom-row split
+  (`--cl`/`--cr`, per page), `.vside` sidebar width (`--side`, per layout). Saved in localStorage.
+  Do not name a split variable like a style token (`--r` is the radius).
+- Header option groups never hide: groups that do not apply are disabled in `setPage`
+  (`simOpt`, `convOpt`), so the header does not shift between pages.
+- `#selftest` (test output of `?selftest` / `?uitest`) is a block after the mains, outside any
+  page, so it shows on every page; `tests/browser.js` reads it from the dumped DOM by id.
+- The shell media query is `screen` only, so printing never gets the fixed-height layout.
+- Published on GitHub Pages under a subpath: keep asset paths relative and file names in exact case.
+
 ## Architecture (Control page)
 
 - `makeModel` (`js/model.js`) is the switched model shared by everything; `m.der`, `m.vout`

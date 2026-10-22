@@ -296,6 +296,64 @@ split by section and diffed against the main files; only the extra functions wer
   (new: median screen brightness light > 200, dark < 60). Screenshots: light screen on a dark
   page, split and overlay views.
 
+### UX rework: app shell (branch `feat/ux-shell`)
+- Header: big title (54 px) with the subtitle under it and the theme switch on the right, the
+  page tabs as an underlined strip below the title, then the option groups. Option groups are
+  disabled, not hidden, on pages where they do not apply, so nothing shifts.
+- App shell at >= 1100x600 px: the page fits the window, sidebar and panels scroll on their
+  own. On Control all sliders (mode, compensator, design helper, circuit, transient) are in
+  the sidebar, so the scope and Bode plot stay in view while tuning.
+- Converter and Control share a tabbed inspector (Theory vs sim / Loop, Measure, Equations,
+  Mode map, Op-amp, Tips). Channel cards fold behind a Channels button in the shell.
+- Design and Losses use the same sidebar + workspace layout.
+- Drag handles: scope height (25 to 80 % of the two rows), bottom-row split between
+  schematic/Bode and the inspector (25 to 75 %), sidebar width (240 to 560 px) on all four
+  pages. Remembered in localStorage; arrow keys move them, double-click or Home resets.
+- Fix: an old Control-only `grid-template-columns` rule (>= 1251 px) overrode the shell grid;
+  it now applies only outside the shell.
+- New style tokens (`--panel-2`, `--focus`, `--r`, `--fs`, `--fs-s`, `--mono`), slim range
+  sliders, collapsible sections. Footer text moved to "About the model" in the sidebar.
+- Checks: `node tests/run.js --strip` identical to before except run times; UI test 79 checks
+  ALL PASS. Screenshots at 1920x1080, 1366x768, 600 and 500 px, light and dark.
+- Pre-publish review (two independent reviews of `main..HEAD`), fixed:
+  test output hidden on Design/Losses (`#selftest` moved out of the sidebar), Non-ideal section
+  reopening on every click, drag handles stuck after right-click or lost capture, ~6 px jump at
+  drag start, Bode plot resizing while hovering (fixed-height readout), sidebar cap not applied
+  to hidden pages, shell layout applying to print, Control button groups not wrapping (dead
+  `.ctlBlock` rule), ARIA values and tab/panel links, dead CSS.
+- After the fixes: Node tests identical apart from run times; UI test 81 checks ALL PASS (new:
+  inspector tabs, Channels button, disabled header groups, sections stay closed); browser
+  selftest ALL PASS; all 28 assets load over http under a subpath with matching case.
+- Upgrades after the review: smaller title below 860 px window height; tab title fixed;
+  Channels button folds the channel cards at every width; scope text/lines scale 1x to 1.6x
+  and Bode 1x to 1.4x with the plot size (1x on normal screens); first-visit guide;
+  Losses and Control print reports (shared `printReport` / `lightImage` / `kvRows` in
+  `js/ui.js`, charts drawn at a fixed size in the light theme); print uses the light color
+  scheme. Design print: Operating points on page 2, header rows in `<thead>`, blue style.
+- Checks: Node tests identical apart from run times; UI test 84 checks ALL PASS (new: guide,
+  Losses and Control print reports incl. theme and scope screen restored); browser selftest
+  ALL PASS; Design, Losses and Control reports printed to PDF with headless Chrome from Night
+  theme (white paper, light charts, sections not split).
+- Control design file: Save / Load design (JSON) in the Loop tab (`controlJSON`,
+  `applyControlJSON` in `js/control-ui.js`; known keys only, clamped to the slider ranges;
+  `CTL.topoKey` is set so a file for another topology keeps its compensator). Bode CSV button
+  in the Bode panel (`bodeCSV`, every curve of the current view). UI test 86 checks ALL PASS.
+- High-res PNG: `chartPNG` in `js/ui.js` redraws a chart at 3x its CSS size (global `dpr`
+  set for that one draw, long side at most 8192 px, background filled with `--panel`), then
+  restores it. Used by the scope PNG and the new Bode PNG and efficiency-chart PNG buttons.
+  Bode CSV / PNG sit at the top right of the Bode panel (next to the legend); in the shell the
+  FRA bar is a 2-column grid, so the plot keeps more height. Report pictures are drawn at 2 px
+  per CSS px (`lightImage`, shared `drawAt`).
+- Fix: the Bode plot (and other pictures) could be missing in a printed report. The pictures
+  are data: URLs that are not loaded yet when `window.print()` runs (probe: `complete=false`
+  at print time); `printReport` now waits for `img.decode()` before printing (`printJob`).
+- Checks: Node tests identical apart from run times; UI test 92 checks ALL PASS (new: PNG
+  size 3x the CSS size and opaque corner for scope, Bode and efficiency; print waits until the
+  report pictures are loaded); browser selftest ALL PASS.
+- NOT_VERIFIED: real touch drags, Firefox and Safari rendering of the range slider styles,
+  printing on a real printer and A4 paper, real file dialogs. (Printed reports with all
+  pictures were checked by hand in the browser after the print-wait fix.)
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations

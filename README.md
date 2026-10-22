@@ -23,18 +23,31 @@ from a local file), with no build step and no dependencies. It has four pages:
   current-mode control (ACMC), designed on a Bode plot and checked with a closed-loop
   switching simulation.
 
+Every page has the same layout: inputs in a sidebar on the left, results on the right. On a
+large window (at least 1100 x 600 px) the page fits the window and the sidebar scrolls on its
+own, so the scope and the Bode plot stay in view while you drag a slider. On a small window
+or a phone the page scrolls as usual, plots first.
+
 ## Key Features
 
 - Ideal or non-ideal parts (ESR, inductor DCR, switch R<sub>on</sub>, diode drop),
   asynchronous diode or synchronous MOSFET, dead time with body diodes, switch-node
   capacitance that rings in DCM.
 - Scope export as CSV and PNG. The scope screen can be dark (default) or light; light is
-  handy for pictures in reports.
+  handy for pictures in reports. PNG pictures (scope, Bode plot, efficiency chart) are drawn
+  again at 3x the size on screen, so text and lines stay sharp in a report.
+- Printed reports on white paper: the Design summary, a Losses report (loss tables and
+  efficiency chart) and a Control report (compensator, loop margins, step response, Bode plot,
+  scope and op-amp values). Charts print in the light colors, also from Night theme.
 - Compensators P, I, PI, Type 2 and Type 3, with k-factor auto design for a target
   crossover and phase margin.
 - Bode plot of plant, compensator, loop gain, closed loop and closed-loop Zout, with
   crossover, phase margin and gain margin. Zeros, poles and gain can be dragged on the plot.
 - Op-amp circuits with R/C values: the error amplifier, and the current amplifier in ACMC.
+- Save and load the control design as JSON (mode, compensator, current loop, targets, test
+  event and the circuit), and export the Bode curves as CSV (frequency, magnitude and phase of
+  every curve) for MATLAB or a spreadsheet. Save and load are in the Loop tab of the Control
+  page; the CSV and PNG buttons are at the top right of the Bode panel.
 - Closed-loop switching simulation with load step, input step, reference step and
   soft-start; step-response numbers and extra scope signals (vc, ramp, duty, iref, ...).
 - PCMC with slope compensation and leading-edge blanking (pulses are skipped below the
@@ -48,6 +61,24 @@ from a local file), with no build step and no dependencies. It has four pages:
 
 Use the [live site](https://natchpai.github.io/converter-lab/), or open `index.html` in a
 browser (works from `file://`).
+
+### Layout tips
+
+- **Resize the panels:** drag the thin grips between panels: the scope height, the sidebar
+  width, and the split between the schematic or Bode plot and the tabs next to it. Double-click
+  a grip to reset it. A focused grip also moves with the arrow keys.
+- **Sections:** click a sidebar heading to fold or unfold it.
+- **Tabs:** theory, measurements, equations, mode map, loop results, op-amp values and tips
+  are tabs in the panel next to the schematic or Bode plot.
+- **Getting started:** a first-visit guide under the header walks through Design, Converter,
+  Losses and Control; each step opens its page. The **Guide** button shows it again.
+- **Channels:** the channel settings of the scope fold behind the **Channels** button (also on
+  phones).
+- **Large screens:** the scope and Bode text and lines grow with the plot size; on a short
+  window the title gets smaller to leave room for the plots.
+- **Header:** buttons that do not apply to the current page are greyed out, not hidden.
+- Panel sizes, open tabs, the theme and the scope screen color are kept in the browser
+  (localStorage).
 
 URL options (add them to the page address):
 

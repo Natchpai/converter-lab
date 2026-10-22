@@ -269,15 +269,12 @@ $('#dPrint').addEventListener('click', () => {
            : ['D switching', `Qrr ${fmtSI(c.QrrD, 'C')}, Cj ${fmtSI(c.CjD, 'F')}`],
     ['Core', `AL ${fmtComp('AL', c.AL)}, Ae ${fmtComp('Ae', c.Ae)}, Ve ${fmtComp('Ve', c.Ve)}, Bsat ${fmtSI(c.Bsat, 'T')}, k ${c.kc}, α ${c.ac}, β ${c.bc}`],
   ];
-  $('#printArea').innerHTML =
-    `<h1>DC-DC converter design summary</h1><p>${TOPO_LABEL[o.topo]}, ${o.sync ? 'synchronous' : 'diode'} rectifier. ${new Date().toLocaleString()}.</p>` +
+  printReport(reportHead('DC-DC converter design summary', `${TOPO_LABEL[o.topo]}, ${o.sync ? 'synchronous' : 'diode'} rectifier. Efficiency includes conduction, switching, Qrr, gate drive and core loss.`) +
     `<h2>Specification</h2><table>${tr(SPEC_FIELDS.map(f => [f.label, fmtSpec(f, s[f.k])]))}</table>` +
     `<h2>Components</h2><table>${tr(comp)}</table>` +
     (o.errs.length ? `<h2>Problems</h2><ul>${o.errs.map(e => `<li>${e}</li>`).join('')}</ul>` : '') +
     `<h2>Sizing</h2><table>${$('#dSizeTbl').innerHTML}</table>` +
-    `<h2>Operating points</h2><table>${$('#dCornerTbl').innerHTML}</table>` +
+    `<h2 class="newPage">Operating points</h2><table>${$('#dCornerTbl').innerHTML}</table>` +
     `<h2>Stress vs rating</h2><table>${$('#dRateTbl').innerHTML}</table>` +
-    `<h2>Design equations</h2><table>${$('#dEqTbl').innerHTML}</table>` +
-    `<p>Made with DC-DC Converter Lab. Efficiency includes conduction, switching, Qrr, gate drive and core loss.</p>`;
-  window.print();
+    `<h2>Design equations</h2><table>${$('#dEqTbl').innerHTML}</table>`);
 });

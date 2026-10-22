@@ -76,10 +76,13 @@ function drawSeries(ctx, rec, arr, win, W, Y, T) {
   ctx.stroke();
 }
 
+// Drawing unit of the scope: device pixels per CSS pixel, times a text/line scale that grows
+// on a large screen (1 up to about 1100 x 360 CSS px, at most 1.6).
+let du = dpr;
 function label(ctx, txt, x, y, color, align = 'left', base = 'top') {
-  ctx.font = `${13 * dpr}px ui-monospace, Consolas, monospace`;
+  ctx.font = `${13 * du}px ui-monospace, Consolas, monospace`;
   ctx.textAlign = align; ctx.textBaseline = base;
-  const w = ctx.measureText(txt).width, h = 17 * dpr, pad = 3 * dpr;
+  const w = ctx.measureText(txt).width, h = 17 * du, pad = 3 * du;
   let bx = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
   let by = base === 'top' ? y : base === 'bottom' ? y - h : y - h / 2;
   ctx.fillStyle = scopePal().labelBg;
@@ -136,6 +139,7 @@ function renderScope() {
   const res = RES; if (!res) return;
   const cv = els.scope, ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height, pal = scopePal();
+  du = dpr * clamp(Math.min(W / dpr / 1100, H / dpr / 360), 1, 1.6);
   ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, W, H);
   const win = timeWindow(res);
   const X = t => (t - win.t0) / win.span * W;
@@ -149,10 +153,10 @@ function renderScope() {
         const xa = X(a), xb = X(b);
         if (xb < 0 || xa > W) continue;
         ctx.fillStyle = fill[st]; ctx.fillRect(xa, 0, xb - xa, H);
-        if (xb - xa > 34 * dpr) {
-          ctx.font = `${12 * dpr}px ui-monospace, Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        if (xb - xa > 34 * du) {
+          ctx.font = `${12 * du}px ui-monospace, Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
           ctx.fillStyle = pal.stName;
-          ctx.fillText(ST_NAME[st], (Math.max(xa, 0) + Math.min(xb, W)) / 2, H - 4 * dpr);
+          ctx.fillText(ST_NAME[st], (Math.max(xa, 0) + Math.min(xb, W)) / 2, H - 4 * du);
         }
       }
     }
@@ -168,8 +172,8 @@ function renderScope() {
   ctx.strokeStyle = pal.axis;
   ctx.beginPath();
   const cx = Math.round(W / 2) + 0.5, cy = Math.round(H / 2) + 0.5;
-  for (let i = 0; i <= 50; i++) { const x = i * W / 50; ctx.moveTo(x, cy - 3 * dpr); ctx.lineTo(x, cy + 3 * dpr); }
-  for (let i = 0; i <= 40; i++) { const y = i * H / 40; ctx.moveTo(cx - 3 * dpr, y); ctx.lineTo(cx + 3 * dpr, y); }
+  for (let i = 0; i <= 50; i++) { const x = i * W / 50; ctx.moveTo(x, cy - 3 * du); ctx.lineTo(x, cy + 3 * du); }
+  for (let i = 0; i <= 40; i++) { const y = i * H / 40; ctx.moveTo(cx - 3 * du, y); ctx.lineTo(cx + 3 * du, y); }
   ctx.stroke();
 
   const maps = chanMaps(res, win, H);
@@ -183,7 +187,7 @@ function renderScope() {
     maps.forEach((mp, j) => { if (j > 0) { const y = Math.round(mp.info.top) + 0.5; ctx.moveTo(0, y); ctx.lineTo(W, y); } });
     ctx.stroke();
     // zero lines
-    ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.setLineDash([4 * du, 4 * du]);
     for (const mp of maps) {
       const y0 = mp.Y(0 + mp.mean);
       if (!mp.c.ac && y0 > mp.info.top && y0 < mp.info.top + mp.info.laneH) {
@@ -198,7 +202,7 @@ function renderScope() {
     if (!mp.tha) continue;
     ctx.save();
     if (state.layout === 'split') { ctx.beginPath(); ctx.rect(0, mp.info.top, W, mp.info.laneH); ctx.clip(); }
-    ctx.strokeStyle = mp.color + '99'; ctx.lineWidth = 1.3 * dpr; ctx.setLineDash([5 * dpr, 4 * dpr]);
+    ctx.strokeStyle = mp.color + '99'; ctx.lineWidth = 1.3 * du; ctx.setLineDash([5 * du, 4 * du]);
     drawSeries(ctx, res.thRec, mp.tha, win, W, mp.Yth, res.T);
     ctx.restore();
   }
@@ -206,8 +210,8 @@ function renderScope() {
   for (const mp of maps) {
     ctx.save();
     if (state.layout === 'split') { ctx.beginPath(); ctx.rect(0, mp.info.top, W, mp.info.laneH); ctx.clip(); }
-    ctx.strokeStyle = mp.color; ctx.lineWidth = 1.7 * dpr; ctx.lineJoin = 'round';
-    ctx.shadowColor = mp.color; ctx.shadowBlur = pal.glow * dpr;
+    ctx.strokeStyle = mp.color; ctx.lineWidth = 1.7 * du; ctx.lineJoin = 'round';
+    ctx.shadowColor = mp.color; ctx.shadowBlur = pal.glow * du;
     drawSeries(ctx, res.rec, mp.arr, win, W, mp.Y, Tp);
     ctx.restore();
   }
@@ -218,24 +222,24 @@ function renderScope() {
     if (state.layout === 'split') {
       const { top, laneH, lo, hi } = mp.info;
       const dig = clamp(Math.ceil(Math.log10(Math.max(Math.abs(hi), Math.abs(lo)) / Math.max(hi - lo, 1e-15))) + 3, 3, 7);
-      label(ctx, name, 6 * dpr, top + 4 * dpr, mp.color);
-      label(ctx, fmtSI(hi + mp.mean, u, dig), W - 6 * dpr, top + 4 * dpr, mp.color, 'right');
-      label(ctx, fmtSI(lo + mp.mean, u, dig), W - 6 * dpr, top + laneH - 4 * dpr, mp.color, 'right', 'bottom');
+      label(ctx, name, 6 * du, top + 4 * du, mp.color);
+      label(ctx, fmtSI(hi + mp.mean, u, dig), W - 6 * du, top + 4 * du, mp.color, 'right');
+      label(ctx, fmtSI(lo + mp.mean, u, dig), W - 6 * du, top + laneH - 4 * du, mp.color, 'right', 'bottom');
     } else {
-      const y0 = clamp(mp.info.y0, 6 * dpr, H - 6 * dpr);
+      const y0 = clamp(mp.info.y0, 6 * du, H - 6 * du);
       ctx.fillStyle = mp.color;
-      ctx.beginPath(); ctx.moveTo(0, y0 - 6 * dpr); ctx.lineTo(10 * dpr, y0); ctx.lineTo(0, y0 + 6 * dpr); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, y0 - 6 * du); ctx.lineTo(10 * du, y0); ctx.lineTo(0, y0 + 6 * du); ctx.fill();
     }
   }
   if (state.layout === 'overlay') {
-    let x = 6 * dpr, y = H - 6 * dpr;
-    ctx.font = `${13 * dpr}px ui-monospace, Consolas, monospace`;
+    let x = 6 * du, y = H - 6 * du;
+    ctx.font = `${13 * du}px ui-monospace, Consolas, monospace`;
     for (const mp of maps) {
       const txt = `CH${mp.i + 1} ${mp.s.n} ${fmtSI(mp.info.scale, mp.s.u)}/div${mp.c.ac ? ' AC' : ''}`;
       const w = ctx.measureText(txt).width;
-      if (x > 6 * dpr && x + w > W - 6 * dpr) { x = 6 * dpr; y -= 21 * dpr; }
+      if (x > 6 * du && x + w > W - 6 * du) { x = 6 * du; y -= 21 * du; }
       label(ctx, txt, x, y, mp.color, 'left', 'bottom');
-      x += w + 14 * dpr;
+      x += w + 14 * du;
     }
   }
   // trigger marker
@@ -243,23 +247,23 @@ function renderScope() {
     const xt = X(0);
     if (xt >= 0 && xt <= W) {
       ctx.fillStyle = pal.mark;
-      ctx.beginPath(); ctx.moveTo(xt - 6 * dpr, 0); ctx.lineTo(xt + 6 * dpr, 0); ctx.lineTo(xt, 9 * dpr); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(xt - 6 * du, 0); ctx.lineTo(xt + 6 * du, 0); ctx.lineTo(xt, 9 * du); ctx.fill();
     }
   }
   // test events (closed-loop simulation)
   for (const ev of res.events || []) {
     const x = Math.round(X(ev.t)) + 0.5;
     if (x < 0 || x > W) continue;
-    ctx.strokeStyle = pal.mark; ctx.lineWidth = 1 * dpr; ctx.setLineDash([2 * dpr, 3 * dpr]);
+    ctx.strokeStyle = pal.mark; ctx.lineWidth = 1 * du; ctx.setLineDash([2 * du, 3 * du]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
-    label(ctx, ev.text, x + 3 * dpr, H - 24 * dpr, pal.mark, 'left', 'bottom');
+    label(ctx, ev.text, x + 3 * du, H - 24 * du, pal.mark, 'left', 'bottom');
   }
   // cursors
   [[state.c1, pal.c1, 'C1'], [state.c2, pal.c2, 'C2']].forEach(([f, col, nm]) => {
     const x = Math.round(f * W) + 0.5;
-    ctx.strokeStyle = col; ctx.lineWidth = 1 * dpr; ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.strokeStyle = col; ctx.lineWidth = 1 * du; ctx.setLineDash([6 * du, 4 * du]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
-    label(ctx, nm, x + 3 * dpr, 14 * dpr, col);
+    label(ctx, nm, x + 3 * du, 14 * du, col);
   });
 }
 

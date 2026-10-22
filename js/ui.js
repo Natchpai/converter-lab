@@ -104,6 +104,7 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
     const grp = g.dataset.group, v = b.dataset.v;
     if (grp === 'page') { setPage(v); return; }
     if (grp === 'nonideal' || grp === 'sync') state[grp] = v === '1'; else state[grp] = v;
+    if (grp === 'nonideal' && state.nonideal) $('#secNonIdeal').open = true;
     if (grp === 'view') { state.hpos = v === 'steady' ? 0.1 : 0; $('#hposRange').value = state.hpos; state.tdiv = 'auto'; $('#tdivSel').value = 'auto'; }
     if (grp === 'topo' || grp === 'sync') { buildSchem(); buildSpecUI(); buildCompUI(); requestDesign(); }
     if (grp === 'layout') { updateChannelUI(); updateSegs(); renderLive(); return; }
@@ -120,7 +121,10 @@ function setPage(pg, noCompute) {
   if (!PAGES.includes(pg)) return;
   state.page = pg;
   document.body.dataset.page = pg;
-  updateSegs();
+  const sim = pg === 'converter' || pg === 'control';
+  document.querySelectorAll('.simOpt button').forEach(b => { b.disabled = !sim; });
+  if (pg === 'control') document.querySelectorAll('.convOpt button').forEach(b => { b.disabled = true; });
+  updateSegs(); applySide(); markGuide();
   if (pg === 'design') { if (designDirty) requestDesign(); return; }
   if (pg === 'losses') { sizeCanvas(effCv, 320); drawEff(); requestLosses(); return; }
   if (pg !== state.simPage) {
@@ -131,9 +135,228 @@ function setPage(pg, noCompute) {
     $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
     state.simPage = pg;
   }
-  buildChannels(); updateNonIdealUI();
+  buildChannels(); updateNonIdealUI(); showTab(savedTab()); setScopeSplit(scopeSplit()); setColSplit(colSplit());
   if (!noCompute) requestCompute();
 }
+
+/* ---------- printed reports: Design summary, Losses and Control reports ---------- */
+// Fills #printArea and prints. A header row moves into <thead>, so it repeats on every page.
+// Chart pictures (data: URLs) are not loaded yet when they are set; print waits for them,
+// else the browser prints the page without them. printJob is that wait (the UI test reads it).
+let printJob = null;
+function printReport(html) {
+  $('#printArea').innerHTML = html;
+  for (const t of $('#printArea').querySelectorAll('table')) {
+    const r = t.rows[0];
+    if (r && r.querySelector('th')) t.createTHead().appendChild(r);
+  }
+  const imgs = [...$('#printArea').querySelectorAll('img')];
+  printJob = null;
+  if (!imgs.length) { window.print(); return; }
+  printJob = Promise.all(imgs.map(i => i.decode().catch(() => {}))).then(() => window.print());
+}
+const reportHead = (title, line) =>
+  `<h1>${title}</h1><p>${line} ${new Date().toLocaleString()}. Made with DC-DC Converter Lab.</p>`;
+// Draws cv once at w x h CSS px with s device px per CSS px (charts read dpr and their size when
+// they draw), returns take(), then draws it again as it was. undo() runs before that last draw.
+function drawAt(cv, redraw, w, h, s, take, undo) {
+  const d0 = dpr, W0 = cv.width, H0 = cv.height;
+  dpr = s; cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+  redraw();
+  const out = take();
+  if (undo) undo();
+  dpr = d0; cv.width = W0; cv.height = H0;
+  redraw();
+  return out;
+}
+// Picture of a chart for paper: at least 2 px per CSS px, in the light theme and on the light scope screen.
+function lightImage(cv, redraw, w, h) {
+  const root = document.documentElement, theme = root.dataset.theme, bg = state.scopeBg;
+  root.dataset.theme = 'light'; state.scopeBg = 'light';
+  return drawAt(cv, redraw, w, h, Math.max(2, dpr), () => cv.toDataURL('image/png'), () => {
+    if (theme) root.dataset.theme = theme; else delete root.dataset.theme;
+    state.scopeBg = bg;
+  });
+}
+// PNG button: the chart as shown, at PNG_SCALE px per CSS px (long side at most PNG_MAX px),
+// on the panel color where the chart leaves the background clear.
+const PNG_SCALE = 3, PNG_MAX = 8192;
+function chartPNG(cv, redraw, name) {
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  const s = Math.min(Math.max(PNG_SCALE, dpr), PNG_MAX / Math.max(w, h));
+  drawAt(cv, redraw, w, h, s, () => {
+    const ctx = cv.getContext('2d');
+    ctx.save(); ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim();
+    ctx.fillRect(0, 0, cv.width, cv.height); ctx.restore();
+    cv.toBlob(b => { if (b) download(b, name); });   // the bitmap is copied now, encoded later
+  });
+}
+// .kv grid (label and value spans) or slider rows (.prow) as table rows
+function kvRows(el) {
+  const s = [...el.children]; let h = '';
+  for (let i = 0; i + 1 < s.length; i += 2) h += `<tr><td>${s[i].innerHTML}</td><td>${s[i + 1].innerHTML}</td></tr>`;
+  return h;
+}
+const sliderRows = sel => [...document.querySelectorAll(sel + ' .prow')].filter(r => !r.closest('[hidden]') && r.style.display !== 'none')
+  .map(r => `<tr><td>${r.querySelector('label').innerHTML}</td><td>${r.querySelector('.num').value}</td></tr>`).join('');
+
+/* ---------- first-visit guide: shown until "Got it", the Guide button shows it again ---------- */
+function markGuide() { document.querySelectorAll('#guide [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === state.page)); }
+function showGuide(on) {
+  $('#guide').hidden = !on;
+  $('#guideBtn').setAttribute('aria-expanded', String(on));
+  markGuide();
+}
+$('#guide').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) setPage(b.dataset.go); });
+$('#guideOk').addEventListener('click', () => { showGuide(false); saveNum('dcdc-guide', 1); });
+$('#guideBtn').addEventListener('click', () => showGuide($('#guide').hidden));
+showGuide(loadNum('dcdc-guide', 0) !== 1);
+
+/* ---------- channel settings: folded behind a button in the app shell ---------- */
+function setChanOpen(on, save) {
+  $('.scopeWrap').classList.toggle('showCh', on);
+  $('#chanBtn').setAttribute('aria-expanded', String(on));
+  if (save) try { localStorage.setItem('dcdc-ch', on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+}
+$('#chanBtn').addEventListener('click', () => setChanOpen(!$('.scopeWrap').classList.contains('showCh'), true));
+try { setChanOpen(localStorage.getItem('dcdc-ch') === '1'); } catch (e) { /* storage blocked */ }
+
+/* ---------- drag handles between panels (app shell): scope height, sidebar width, bottom row ---------- */
+function loadNum(key, def) {
+  let v = NaN;
+  try { v = parseFloat(localStorage.getItem(key)); } catch (e) { /* storage blocked */ }
+  return isFinite(v) ? v : def;
+}
+function saveNum(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) { /* storage blocked */ } }
+function dropKey(key) { try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ } }
+// o.start() measures the panels when a drag starts, o.value(ctx, pos) turns the position of the
+// handle's left/top edge into a value, o.set(v, save) applies and returns the clamped value,
+// o.get() the current one.
+function bindSplitter(el, o) {
+  let drag = null;
+  const edge = e => ({ clientX: e.clientX - drag.dx, clientY: e.clientY - drag.dy });
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const r = el.getBoundingClientRect();
+    drag = { ctx: o.start(), v: o.get(), moved: false, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    el.classList.add('drag');
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* synthetic event */ }
+    e.preventDefault();
+  });
+  const end = () => { if (!drag) return; if (drag.moved) o.set(drag.v, true); drag = null; el.classList.remove('drag'); };
+  el.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!(e.buttons & 1)) { end(); return; }
+    drag.v = o.set(o.value(drag.ctx, edge(e))); drag.moved = true;
+  });
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
+  el.addEventListener('dblclick', o.reset);
+  el.addEventListener('keydown', e => {
+    const d = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
+    if (d) { e.preventDefault(); o.set(o.get() + d * o.step, true); }
+    else if (e.key === 'Home') { e.preventDefault(); o.reset(); }
+  });
+}
+const bottomLeft = () => $(state.page === 'control' ? '#bodePanel' : '.schem');
+
+// scope height: share of the two rows, per page
+const SPLIT_DEF = { converter: 1.3 / 2.3, control: 0.5 };
+const scopeSplit = () => loadNum('dcdc-split-' + state.page, SPLIT_DEF[state.page] || SPLIT_DEF.converter);
+function setScopeSplit(f, save) {
+  f = clamp(f, 0.25, 0.8);
+  const m = $('#page-sim');
+  m.style.setProperty('--top', f.toFixed(3) + 'fr');
+  m.style.setProperty('--bot', (1 - f).toFixed(3) + 'fr');
+  $('#scopeSplit').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+  if (save) saveNum('dcdc-split-' + state.page, f.toFixed(3));
+  return f;
+}
+function resetScopeSplit() { dropKey('dcdc-split-' + state.page); setScopeSplit(scopeSplit()); }
+bindSplitter($('#scopeSplit'), {
+  start: () => { const t = $('.scopeWrap').getBoundingClientRect(); return { y0: t.top, h: t.height + bottomLeft().getBoundingClientRect().height }; },
+  value: (c, e) => (e.clientY - c.y0) / c.h,
+  get: scopeSplit, set: setScopeSplit, reset: resetScopeSplit, step: 0.03,
+});
+
+// bottom row: share of the left panel (schematic or Bode) next to the inspector, per page
+const COLS_DEF = { converter: 1.2 / 2.2, control: 1.4 / 2.4 };
+const colSplit = () => loadNum('dcdc-cols-' + state.page, COLS_DEF[state.page] || COLS_DEF.converter);
+function setColSplit(f, save) {
+  f = clamp(f, 0.25, 0.75);
+  const m = $('#page-sim');
+  m.style.setProperty('--cl', f.toFixed(3) + 'fr');
+  m.style.setProperty('--cr', (1 - f).toFixed(3) + 'fr');
+  $('#colSplit').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+  if (save) saveNum('dcdc-cols-' + state.page, f.toFixed(3));
+  return f;
+}
+function resetColSplit() { dropKey('dcdc-cols-' + state.page); setColSplit(colSplit()); }
+bindSplitter($('#colSplit'), {
+  start: () => { const l = bottomLeft().getBoundingClientRect(); return { x0: l.left, w: l.width + $('#inspector').getBoundingClientRect().width }; },
+  value: (c, e) => (e.clientX - c.x0) / c.w,
+  get: colSplit, set: setColSplit, reset: resetColSplit, step: 0.03,
+});
+
+// sidebar width in px, one per layout (Converter and Control share theirs)
+const SIDE_DEF = { 'page-sim': 320, 'page-design': 340, 'page-losses': 320 };
+const sideWidth = m => loadNum('dcdc-side-' + m.id, SIDE_DEF[m.id]);
+function setSideWidth(m, w, save) {
+  w = Math.round(clamp(w, 240, Math.max(240, Math.min(560, 0.45 * (m.clientWidth || 1e4)))));
+  m.style.setProperty('--side', w + 'px');
+  m.querySelector('.vside').setAttribute('aria-valuenow', String(w));
+  if (save) saveNum('dcdc-side-' + m.id, w);
+  return w;
+}
+document.querySelectorAll('.vside').forEach(el => {
+  const m = el.parentElement;
+  const reset = () => { dropKey('dcdc-side-' + m.id); setSideWidth(m, sideWidth(m)); };
+  bindSplitter(el, {
+    start: () => m.getBoundingClientRect().left + parseFloat(getComputedStyle(m).paddingLeft),
+    value: (x0, e) => e.clientX - x0,
+    get: () => parseFloat(m.style.getPropertyValue('--side')) || sideWidth(m),
+    set: (w, save) => setSideWidth(m, w, save), reset, step: 16,
+  });
+});
+// The width cap depends on the page width, so apply it again for the visible layout.
+function applySide() {
+  document.querySelectorAll('.vside').forEach(el => { const m = el.parentElement; if (m.clientWidth) setSideWidth(m, sideWidth(m)); });
+}
+function applySplits() {
+  document.querySelectorAll('.vside').forEach(el => setSideWidth(el.parentElement, sideWidth(el.parentElement)));
+  applySide(); setScopeSplit(scopeSplit()); setColSplit(colSplit());
+}
+window.addEventListener('resize', applySide);
+
+/* ---------- inspector tabs (Converter and Control pages) ---------- */
+const TABS = { converter: ['theory', 'meas', 'eq', 'map', 'tips'], control: ['loop', 'meas', 'amp', 'notes'] };
+function savedTab() {
+  try { return localStorage.getItem('dcdc-tab-' + state.page) || ''; } catch (e) { return ''; }
+}
+function showTab(t, save) {
+  const list = TABS[state.page]; if (!list) return;
+  if (!list.includes(t)) t = list[0];
+  document.querySelectorAll('#inspTabs [data-tab]').forEach(b => {
+    const on = b.dataset.tab === t;
+    b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('#inspector [data-pane]').forEach(p => { p.hidden = p.dataset.pane !== t; });
+  if (save) try { localStorage.setItem('dcdc-tab-' + state.page, t); } catch (e) { /* storage blocked */ }
+}
+$('#inspTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab, true);
+});
+$('#inspTabs').addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const list = TABS[state.page], i = list.indexOf(document.activeElement.dataset.tab);
+  if (i < 0) return;
+  const t = list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
+  showTab(t, true);
+  $(`#inspTabs [data-tab="${t}"]`).focus();
+});
 
 document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.preset;
@@ -201,14 +424,18 @@ function sizeCanvas(cv, cssH) {
 }
 // Draw right away after resizing: setting canvas.width clears it, and waiting for the
 // next animation frame would show one blank frame.
+// App shell (css/app.css): on a large window the screen gets its height from the layout.
+const SHELL = window.matchMedia('screen and (min-width: 1100px) and (min-height: 600px)');
 function resize() {
   const w = els.screen.clientWidth;
-  sizeCanvas(els.scope, Math.round(clamp(w * 0.56, 260, 560)));
+  sizeCanvas(els.scope, SHELL.matches ? Math.max(120, els.screen.clientHeight) : Math.round(clamp(w * 0.56, 260, 560)));
   if (RES && onSimPage()) renderLiveNow();
   drawPageCanvas(true);
 }
 new ResizeObserver(() => resize()).observe(els.screen);
 new ResizeObserver(() => drawPageCanvas(true)).observe(els.mm.parentElement);
+new ResizeObserver(() => drawPageCanvas(true)).observe($('#bodeWrap'));
+SHELL.addEventListener('change', () => resize());
 // The canvas of the side panel on the current page (mode map or Bode plot).
 function drawPageCanvas(resized) {
   if (!RES || !onSimPage()) return;
@@ -285,4 +512,4 @@ function scopeCSV(res) {
 }
 const exportName = () => `dcdc-${state.topo}-${state.page === 'control' ? 'control' : state.view}`;
 $('#csvBtn').addEventListener('click', () => { if (RES) download(new Blob([scopeCSV(RES)], { type: 'text/csv' }), exportName() + '.csv'); });
-$('#pngBtn').addEventListener('click', () => els.scope.toBlob(b => { if (b) download(b, exportName() + '.png'); }));
+$('#pngBtn').addEventListener('click', () => { if (RES) chartPNG(els.scope, renderScope, exportName() + '.png'); });
