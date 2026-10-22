@@ -120,6 +120,9 @@ function setPage(pg, noCompute) {
   if (!PAGES.includes(pg)) return;
   state.page = pg;
   document.body.dataset.page = pg;
+  const sim = pg === 'converter' || pg === 'control';
+  document.querySelectorAll('.simOpt button').forEach(b => { b.disabled = !sim; });
+  if (pg === 'control') document.querySelectorAll('.convOpt button').forEach(b => { b.disabled = true; });
   updateSegs();
   if (pg === 'design') { if (designDirty) requestDesign(); return; }
   if (pg === 'losses') { sizeCanvas(effCv, 320); drawEff(); requestLosses(); return; }

@@ -37,14 +37,16 @@ h3 { font-size: 15px; margin: 14px 0 6px; color: var(--muted); }
 p { margin: 6px 0; }
 
 header.top {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 8px;
+  display: flex; flex-direction: column; gap: 8px;
   padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
 }
 @media (min-width: 821px) { header.top { position: sticky; top: 0; z-index: 10; } }
-.brand { margin-right: auto; }
-.brand span { color: var(--muted); font-size: 14px; }
-/* four page buttons: drop the subtitle so the header stays on one line */
-@media (min-width: 821px) and (max-width: 1560px) { .brand span { display: none; } }
+.topRow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.topRow #themeSeg { margin-left: auto; }
+.optRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.brand span { color: var(--muted); font-size: 14px; margin-left: 4px; }
+.brand h1 { display: inline; }
+@media (max-width: 1100px) { .brand span { display: none; } }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--soft); }
 .seg button {
   border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 15px;
@@ -163,9 +165,7 @@ footer { max-width: 1680px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
 body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { display: none !important; }
 body:not([data-page="design"]) .designOnly, body:not([data-page="losses"]) .lossOnly { display: none !important; }
 body[data-page="design"] main.layout, body[data-page="losses"] main.layout,
-body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }
-.seg.page button[aria-pressed="true"] { font-weight: 700; }
-.bode { grid-area: schem; }
+body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }.bode { grid-area: schem; }
 .design { grid-area: theory; }
 #bodeWrap { position: relative; }
 #bode { width: 100%; display: block; touch-action: none; }

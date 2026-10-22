@@ -9,27 +9,31 @@
 <body data-page="converter">
 
 <header class="top">
-  <div class="brand">
-    <h1>DC-DC Converter Lab</h1>
-    <span>Buck, Boost and Buck-Boost in CCM and DCM, with a 4-channel scope</span>
+  <div class="topRow">
+    <div class="brand">
+      <h1>DC-DC Converter Lab</h1>
+      <span>Buck, Boost and Buck-Boost in CCM and DCM, with a 4-channel scope</span>
+    </div>
+    <div class="seg page" data-group="page" role="group" aria-label="Page">
+      <button data-v="design">Design</button><button data-v="converter">Converter</button><button data-v="losses">Losses</button><button data-v="control">Control</button>
+    </div>
+    <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
+      <button data-t="light">☀ Light</button><button data-t="dark">☾ Night</button>
+    </div>
   </div>
-  <div class="seg page" data-group="page" role="group" aria-label="Page">
-    <button data-v="design">Design</button><button data-v="converter">Converter</button><button data-v="losses">Losses</button><button data-v="control">Control</button>
-  </div>
-  <div class="seg" data-group="topo" role="group" aria-label="Topology">
-    <button data-v="buck">Buck</button><button data-v="boost">Boost</button><button data-v="bb">Buck-Boost</button>
-  </div>
-  <div class="seg simOnly" data-group="nonideal" role="group" aria-label="Model">
-    <button data-v="0">Ideal</button><button data-v="1">Non-ideal</button>
-  </div>
-  <div class="seg" data-group="sync" role="group" aria-label="Rectifier">
-    <button data-v="0">Async (diode)</button><button data-v="1">Sync (MOSFET)</button>
-  </div>
-  <div class="seg convOnly simOnly" data-group="view" role="group" aria-label="View">
-    <button data-v="steady">Steady state</button><button data-v="startup">Startup</button>
-  </div>
-  <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
-    <button data-t="light">☀ Light</button><button data-t="dark">☾ Night</button>
+  <div class="optRow">
+    <div class="seg" data-group="topo" role="group" aria-label="Topology">
+      <button data-v="buck">Buck</button><button data-v="boost">Boost</button><button data-v="bb">Buck-Boost</button>
+    </div>
+    <div class="seg" data-group="sync" role="group" aria-label="Rectifier">
+      <button data-v="0">Async (diode)</button><button data-v="1">Sync (MOSFET)</button>
+    </div>
+    <div class="seg simOpt" data-group="nonideal" role="group" aria-label="Model">
+      <button data-v="0">Ideal</button><button data-v="1">Non-ideal</button>
+    </div>
+    <div class="seg convOpt simOpt" data-group="view" role="group" aria-label="View">
+      <button data-v="steady">Steady state</button><button data-v="startup">Startup</button>
+    </div>
   </div>
 </header>
 
