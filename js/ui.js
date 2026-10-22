@@ -139,6 +139,42 @@ function setPage(pg, noCompute) {
   if (!noCompute) requestCompute();
 }
 
+/* ---------- printed reports: Design summary, Losses and Control reports ---------- */
+// Fills #printArea and prints. A header row moves into <thead>, so it repeats on every page.
+function printReport(html) {
+  $('#printArea').innerHTML = html;
+  for (const t of $('#printArea').querySelectorAll('table')) {
+    const r = t.rows[0];
+    if (r && r.querySelector('th')) t.createTHead().appendChild(r);
+  }
+  window.print();
+}
+const reportHead = (title, line) =>
+  `<h1>${title}</h1><p>${line} ${new Date().toLocaleString()}. Made with DC-DC Converter Lab.</p>`;
+// Picture of a chart for paper: drawn once at w x h CSS px in the light theme and on the light
+// scope screen (charts read their size and colors when they draw), then drawn again as it was.
+function lightImage(cv, redraw, w, h) {
+  const root = document.documentElement, theme = root.dataset.theme, bg = state.scopeBg;
+  const W0 = cv.width, H0 = cv.height;
+  root.dataset.theme = 'light'; state.scopeBg = 'light';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  redraw();
+  const url = cv.toDataURL('image/png');
+  if (theme) root.dataset.theme = theme; else delete root.dataset.theme;
+  state.scopeBg = bg;
+  cv.width = W0; cv.height = H0;
+  redraw();
+  return url;
+}
+// .kv grid (label and value spans) or slider rows (.prow) as table rows
+function kvRows(el) {
+  const s = [...el.children]; let h = '';
+  for (let i = 0; i + 1 < s.length; i += 2) h += `<tr><td>${s[i].innerHTML}</td><td>${s[i + 1].innerHTML}</td></tr>`;
+  return h;
+}
+const sliderRows = sel => [...document.querySelectorAll(sel + ' .prow')].filter(r => !r.closest('[hidden]') && r.style.display !== 'none')
+  .map(r => `<tr><td>${r.querySelector('label').innerHTML}</td><td>${r.querySelector('.num').value}</td></tr>`).join('');
+
 /* ---------- first-visit guide: shown until "Got it", the Guide button shows it again ---------- */
 function markGuide() { document.querySelectorAll('#guide [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === state.page)); }
 function showGuide(on) {

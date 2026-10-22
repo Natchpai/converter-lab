@@ -246,6 +246,7 @@ function buildControlUI() {
       <label class="ctlInline" style="margin-left:12px">Length <select id="trLen">${['auto', 100, 200, 500, 1000, 2000, 3000].map(v => `<option value="${v}">${v === 'auto' ? 'Auto' : v + ' periods'}</option>`).join('')}</select></label>
     </details>`;
   $('#ctlLoop').innerHTML = `
+    <div class="btnRow"><button class="btn" id="cPrint" title="Print the loop design, Bode plot and step response">Print report</button></div>
     <div id="loopOk"></div>
     <div class="kv" id="loopKv"></div>
     <ul class="warnList" id="loopWarn"></ul>
@@ -298,6 +299,7 @@ function buildControlUI() {
     buildCompRows(); autoDesign(); updateCtlSegs(); ctlChanged(null, true);
   });
   $('#btnAuto').addEventListener('click', () => { autoDesign(); ctlChanged(null, true); });
+  $('#cPrint').addEventListener('click', printControlReport);
   $('#btnSuggest').addEventListener('click', () => { autoDesign('suggest'); ctlChanged(null, true); });
   $('#btnTextbook').addEventListener('click', () => {
     CTL.cfg.comp.type = 'T3'; buildCompRows(); autoDesign('textbook'); updateCtlSegs(); ctlChanged(null, true);
@@ -727,4 +729,25 @@ function dragTo(e) {
   d.hc.cfg[d.h.key] = +clamp(v, def.min, def.max).toPrecision(4);
   syncRows(d.hc.pre, compDefs(d.hc.cfg), d.hc.get);
   ctlChanged(d.h.key, false);
+}
+
+// Printed control report: setup, operating point, compensator, loop and step results, then the
+// Bode plot and the scope, then the op-amp values.
+const CTL_MODE_NAME = { vmc: 'voltage-mode control (VMC)', pcmc: 'peak current-mode control (PCMC)', acmc: 'average current-mode control (ACMC)' };
+function printControlReport() {
+  const p = state.p, md = CTL.cfg.mode, acmc = md === 'acmc';
+  const setup = `${TOPO_LABEL[state.topo]}, ${state.sync ? 'synchronous' : 'diode'} rectifier, ${CTL_MODE_NAME[md]}. ` +
+    `V<sub>in</sub> = ${fmtSI(p.Vg, 'V')}, L = ${fmtSI(p.L, 'H')}, C = ${fmtSI(p.C, 'F')}, R = ${fmtSI(p.R, 'Ω')}, f<sub>s</sub> = ${fmtSI(p.fs, 'Hz')}.`;
+  const warn = [...$('#loopWarn').children].map(li => `<li>${li.innerHTML}</li>`).join('');
+  printReport(reportHead('DC-DC converter control report', setup) +
+    `<h2>Operating point and modulator</h2><table>${kvRows($('#ctlOp'))}${sliderRows('#ctlSideRows')}</table>` +
+    (acmc ? `<h2>Current loop: amplifier G<sub>ci</sub></h2><table><tr><td>Type</td><td>${COMP_TYPES[CTL.cfg.ci.type].name}</td></tr>${sliderRows('#ciRows')}</table>` : '') +
+    `<h2>${acmc ? 'Voltage loop: compensator G<sub>cv</sub>' : 'Compensator'}</h2>` +
+    `<table><tr><td>Type</td><td>${COMP_TYPES[CTL.cfg.comp.type].name}</td></tr>${sliderRows('#compRows')}</table>` +
+    `<h2>Loop result</h2><p>${$('#loopOk').textContent}</p><table>${kvRows($('#loopKv'))}</table>` + (warn ? `<ul>${warn}</ul>` : '') +
+    `<div class="keep"><h2>Step response: ${CL_EVENTS[CTL.tr.event].name}</h2><table>${kvRows($('#stepKv'))}</table></div>` +
+    `<h2>Bode plot</h2><img alt="Bode plot" src="${lightImage(CTL.bode, drawBode, 1000, 560)}">` +
+    `<h2>Scope</h2><img alt="Scope screen" src="${lightImage(els.scope, renderScope, 1000, 420)}">` +
+    `<div class="keep"><h2>Error amplifier</h2><table>${$('#opampTbl').innerHTML}</table></div>` +
+    (acmc ? `<div class="keep"><h2>Current amplifier</h2><table>${$('#opampTblI').innerHTML}</table></div>` : ''));
 }

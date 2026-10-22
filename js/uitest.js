@@ -249,6 +249,24 @@ function runUiTests() {
     const sel = $('#lSrc'); sel.value = 'sim'; sel.dispatchEvent(new Event('change'));
     if ($('#lWarn').textContent || !/Converter page/.test($('#lSum').textContent)) throw new Error($('#lWarn').textContent || 'wrong source');
   });
+  // printed reports: window.print is stubbed; each report has its tables and chart pictures,
+  // and the page theme is the same afterwards
+  const printed = (btn, re, nImg) => {
+    const pr = window.print, theme = document.documentElement.dataset.theme; let n = 0;
+    window.print = () => { n++; };
+    try { click(btn); } finally { window.print = pr; }
+    const a = $('#printArea'), imgs = [...a.querySelectorAll('img')];
+    if (n !== 1 || !re.test(a.textContent) || /NaN/.test(a.textContent)) throw new Error(`print ${n}`);
+    if (imgs.length !== nImg || imgs.some(i => !/^data:image\/png/.test(i.src))) throw new Error(`${imgs.length} pictures`);
+    if (document.documentElement.dataset.theme !== theme) throw new Error('theme not restored');
+  };
+  step('Losses print report', () => printed('#lPrint', /loss report/, 1));
+  step('Control print report', () => {
+    click('[data-group="page"] [data-v="control"]');
+    printed('#cPrint', /control report/, 2);
+    if (state.scopeBg !== 'dark') throw new Error('scope screen not restored');
+    click('[data-group="page"] [data-v="losses"]');
+  });
   window.removeEventListener('error', onErr);
   out.unshift(allPass ? 'UI TEST: ALL PASS' : 'UI TEST: FAILURES');
   return { allPass, lines: out };

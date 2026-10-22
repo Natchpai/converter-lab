@@ -359,6 +359,7 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
 .sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 @media print {
   @page { margin: 14mm 12mm; }
+  :root, :root[data-theme="dark"] { color-scheme: light; }
   html, body { background: #fff !important; }
   body > *:not(#printArea) { display: none !important; }
   #printArea {
@@ -379,6 +380,10 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   #printArea th { background: #dbeafe; font-weight: 600; }
   #printArea tbody tr:nth-child(even) td { background: #f5f9ff; }
   #printArea td small { color: #000; }
+  #printArea img { display: block; width: 100%; margin: 4px 0 12px; border: 1px solid #bfdbfe; break-inside: avoid; }
+  #printArea h2:has(+ img) { break-after: avoid; }
+  #printArea .keep { break-inside: avoid; }
+  #printArea ul { margin: 4px 0 10px; padding-left: 18px; }
   #printArea .chip { background: #fff !important; color: #000; border: 1.5px solid; padding: 0 6px; font-weight: 600; }
   #printArea .chip.ok { border-color: #15803d; } #printArea .chip.warn { border-color: #d97706; }
   #printArea .chip.bad { border-color: #dc2626; } #printArea .chip.na { border-color: #64748b; }
