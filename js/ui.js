@@ -35,6 +35,7 @@ function syncAllParams() { for (const k in PDEF) syncParam(k); }
 
 function updateNonIdealUI() {
   $('#nonIdealHint').style.display = state.nonideal ? 'none' : '';
+  if (state.nonideal) $('#secNonIdeal').open = true;
   for (const d of NONIDEAL) {
     const row = $('#row-' + d.k);
     const hidden = (d.only === 'sync' && !state.sync) || (d.only === 'async' && state.sync);
@@ -134,9 +135,45 @@ function setPage(pg, noCompute) {
     $('#tdivSel').value = state.tdiv; $('#hposRange').value = state.hpos;
     state.simPage = pg;
   }
-  buildChannels(); updateNonIdealUI();
+  buildChannels(); updateNonIdealUI(); showTab(savedTab());
   if (!noCompute) requestCompute();
 }
+
+/* ---------- channel settings: folded behind a button in the app shell ---------- */
+function setChanOpen(on, save) {
+  $('.scopeWrap').classList.toggle('showCh', on);
+  $('#chanBtn').setAttribute('aria-expanded', String(on));
+  if (save) try { localStorage.setItem('dcdc-ch', on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+}
+$('#chanBtn').addEventListener('click', () => setChanOpen(!$('.scopeWrap').classList.contains('showCh'), true));
+try { setChanOpen(localStorage.getItem('dcdc-ch') === '1'); } catch (e) { /* storage blocked */ }
+
+/* ---------- inspector tabs (Converter and Control pages) ---------- */
+const TABS = { converter: ['theory', 'meas', 'eq', 'map', 'tips'], control: ['loop', 'meas', 'amp', 'notes'] };
+function savedTab() {
+  try { return localStorage.getItem('dcdc-tab-' + state.page) || ''; } catch (e) { return ''; }
+}
+function showTab(t, save) {
+  const list = TABS[state.page]; if (!list) return;
+  if (!list.includes(t)) t = list[0];
+  document.querySelectorAll('#inspTabs [data-tab]').forEach(b => {
+    const on = b.dataset.tab === t;
+    b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('#inspector [data-pane]').forEach(p => { p.hidden = p.dataset.pane !== t; });
+  if (save) try { localStorage.setItem('dcdc-tab-' + state.page, t); } catch (e) { /* storage blocked */ }
+}
+$('#inspTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab, true);
+});
+$('#inspTabs').addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const list = TABS[state.page], i = list.indexOf(document.activeElement.dataset.tab);
+  if (i < 0) return;
+  const t = list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
+  showTab(t, true);
+  $(`#inspTabs [data-tab="${t}"]`).focus();
+});
 
 document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.preset;

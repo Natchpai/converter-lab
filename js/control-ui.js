@@ -3,7 +3,7 @@
 /* ================= control page ================= */
 // All control-page UI state lives in CTL, so names do not clash with the converter page.
 const CTL = {
-  bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'), design: $('#designBody'),
+  bode: $('#bode'), bodeInfo: $('#bodeInfo'), side: $('#ctlSide'),
   hoverF: null, data: null, geo: null, L: null, notes: [], topoKey: null,
   bodeView: 'outer',                      // ACMC: 'outer' voltage loop or 'inner' current loop
   fra: null, curKey: '',                  // last FRA run and the settings it belongs to
@@ -165,7 +165,7 @@ function buildSideRows() {
   const md = CTL.cfg.mode;
   $('#btnTextbook').hidden = md !== 'vmc';  // the textbook Type 3 placement is for the LC plant (VMC)
   $('#ciBlock').hidden = md !== 'acmc';
-  $('#compTitle').innerHTML = md === 'acmc' ? 'Voltage loop: compensator G<sub>cv</sub>' : 'Compensator';
+  $('#compTitle').innerHTML = md === 'acmc' ? 'Voltage loop: compensator G<sub>cv</sub>' : '';
 }
 
 function buildCompRows() {
@@ -202,51 +202,56 @@ function requestControlRender() {
 
 function buildControlUI() {
   CTL.side.innerHTML = `
-    <h2>Control</h2>
-    <div class="ctlBlock">
+    <details class="sec" open>
+      <summary>Control</summary>
       <div class="seg small" id="ctlMode" role="group" aria-label="Control mode">
         <button data-m="vmc" title="Voltage-mode control">VMC</button><button data-m="pcmc" title="Peak current-mode control with slope compensation">Peak CMC</button><button data-m="acmc" title="Average current-mode control: current amplifier inside, voltage loop outside">Avg CMC</button>
       </div>
       <div id="ctlSideRows"></div>
       <div class="kv" id="ctlOp"></div>
-    </div>
-    <h2>Transient test</h2>
-    <div class="ctlBlock">
+    </details>
+    <details class="sec" open>
+      <summary>Compensator</summary>
+      <div id="ciBlock" hidden>
+        <h3>Current loop: amplifier G<sub>ci</sub></h3>
+        <div class="seg small" id="ciType" role="group" aria-label="Current amplifier type">
+          ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
+        </div>
+        <div id="ciRows"></div>
+        ${rowsHTML('cti', CTL_TARGET_I)}
+        <p class="note">Auto design (below) designs the current loop first, then the voltage loop with the current loop closed.</p>
+      </div>
+      <h3 id="compTitle"></h3>
+      <div class="seg small" id="compType" role="group" aria-label="Compensator type">
+        ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
+      </div>
+      <div id="compRows"></div>
+    </details>
+    <details class="sec" open>
+      <summary>Design helper</summary>
+      ${rowsHTML('ct', CTL_TARGET)}
+      <div class="btnRow">
+        <button class="btn primary" id="btnAuto" title="Venable k-factor: place zeros and poles for the target fc and PM">Auto design (k-factor)</button>
+        <button class="btn" id="btnSuggest" title="fs/10, and below fRHP/5 when there is an RHP zero">Suggest f<sub>c</sub></button>
+        <button class="btn" id="btnTextbook" title="Type 3 zeros at f0, poles at fESR and fs/2">Textbook Type 3</button>
+      </div>
+      <p class="note" id="designNotes"></p>
+    </details>`;
+  $('#ctlTrans').innerHTML = `
+    <details class="sec" open>
+      <summary>Transient test</summary>
       <label class="ctlInline trEv">Event <select id="trEvent">${Object.entries(CL_EVENTS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select></label>
       ${rowsHTML('tr', CTL_TR)}
       <label class="ctlInline"><input type="checkbox" id="trBack" checked> Step back later</label>
       <label class="ctlInline" style="margin-left:12px">Length <select id="trLen">${['auto', 100, 200, 500, 1000, 2000, 3000].map(v => `<option value="${v}">${v === 'auto' ? 'Auto' : v + ' periods'}</option>`).join('')}</select></label>
-    </div>`;
-  CTL.design.innerHTML = `
-    <div id="ciBlock" hidden>
-      <h3>Current loop: amplifier G<sub>ci</sub></h3>
-      <div class="seg small" id="ciType" role="group" aria-label="Current amplifier type">
-        ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
-      </div>
-      <div id="ciRows"></div>
-      ${rowsHTML('cti', CTL_TARGET_I)}
-      <p class="note">Auto design (below) designs the current loop first, then the voltage loop with the current loop closed.</p>
-    </div>
-    <h3 id="compTitle">Compensator</h3>
-    <div class="seg small" id="compType" role="group" aria-label="Compensator type">
-      ${Object.entries(COMP_TYPES).map(([k, v]) => `<button data-t="${k}">${v.name}</button>`).join('')}
-    </div>
-    <div id="compRows"></div>
-    <h3>Design helper</h3>
-    ${rowsHTML('ct', CTL_TARGET)}
-    <div class="btnRow">
-      <button class="btn primary" id="btnAuto" title="Venable k-factor: place zeros and poles for the target fc and PM">Auto design (k-factor)</button>
-      <button class="btn" id="btnSuggest" title="fs/10, and below fRHP/5 when there is an RHP zero">Suggest f<sub>c</sub></button>
-      <button class="btn" id="btnTextbook" title="Type 3 zeros at f0, poles at fESR and fs/2">Textbook Type 3</button>
-    </div>
-    <p class="note" id="designNotes"></p>
-    <h3>Loop result</h3>
+    </details>`;
+  $('#ctlLoop').innerHTML = `
     <div id="loopOk"></div>
     <div class="kv" id="loopKv"></div>
     <ul class="warnList" id="loopWarn"></ul>
     <h3>Step response (switching simulation)</h3>
-    <div class="kv" id="stepKv"></div>
-    <h3>Error amplifier circuit</h3>
+    <div class="kv" id="stepKv"></div>`;
+  $('#ctlAmp').innerHTML = `
     ${rowsHTML('co', CTL_OPAMP)}
     <div id="opampSvg"></div>
     <div class="tblWrap"><table class="data" id="opampTbl"></table></div>
@@ -257,9 +262,7 @@ function buildControlUI() {
       <p class="note">Z<sub>f</sub>/Z<sub>in</sub> = G<sub>ci</sub>. With i<sub>ref</sub> on the + input the output is
         v<sub>c</sub> = G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>) + i<sub>ref</sub>: the current loop is exact, the extra
         i<sub>ref</sub> is small where |G<sub>ci</sub>| ≫ 1 (the simulation uses G<sub>ci</sub>·(i<sub>ref</sub> − R<sub>i</sub>·i<sub>L</sub>)).</p>
-    </div>
-    <h3>What to look at</h3>
-    <ul class="tips" id="ctlTips"></ul>`;
+    </div>`;
   bindRows('ct', CTL_TARGET, tgtGet, tgtSet, ctlChanged);
   bindRows('co', CTL_OPAMP, k => CTL.cfg[k], (k, v) => { CTL.cfg[k] = v; }, ctlChanged);
   bindRows('cti', CTL_TARGET_I, tgtGet, tgtSet, ctlChanged);

@@ -13,6 +13,7 @@ buildCompUI();
 const query = new URLSearchParams(location.search);
 if (['pcmc', 'acmc'].includes(query.get('mode'))) $(`#ctlMode button[data-m="${query.get('mode')}"]`).click();
 if (['design', 'losses', 'control'].includes(query.get('page'))) setPage(query.get('page'), true);
+showTab(savedTab());
 updateSegs();
 updateNonIdealUI();
 compute();

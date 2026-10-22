@@ -77,7 +77,18 @@ main.layout {
 .controls { grid-area: ctl; align-self: start; }
 .scopeWrap { grid-area: scope; }
 .schem { grid-area: schem; }
-.theory { grid-area: theory; }
+.insp { grid-area: theory; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); margin: -4px 0 10px; }
+.tabs button {
+  font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 6px 10px; min-height: 32px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.tabPane[hidden] { display: none; }
+#compTitle:empty { display: none; }
+.chanToggle { display: none; }
+.chanToggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 
 .prow { margin: 4px 0 10px; }
 .prow .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -136,7 +147,7 @@ select {
 
 .chanRow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 @media (max-width: 700px) { .chanRow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.ch { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.ch { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: var(--r); padding: 4px 8px; min-width: 0; background: var(--panel-2); }
 .ch .h { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: var(--c); font-size: 15px; }
 .ch .h label { color: var(--ink); font-weight: 400; font-size: 14px; display: inline-flex; gap: 4px; align-items: center; }
 .ch select { width: 100%; margin-top: 4px; }
@@ -189,7 +200,7 @@ table.eq td.tag { font-size: 13px; color: var(--muted); width: 1%; white-space: 
 .warn { color: var(--dcm); font-size: 14px; }
 /* collapsible sections: details.sec and the "About the model" block */
 details.sec, details.about { border-top: 1px solid var(--line); padding: 6px 0 2px; }
-details.sec:first-child { border-top: 0; padding-top: 0; }
+details.sec:first-child, body:not([data-page="control"]) #secCircuit { border-top: 0; padding-top: 0; }
 details.sec > summary, details.about > summary {
   list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; min-height: 30px;
   font-size: 12.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
@@ -209,7 +220,6 @@ body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { 
 body:not([data-page="design"]) .designOnly, body:not([data-page="losses"]) .lossOnly { display: none !important; }
 body[data-page="design"] main.layout, body[data-page="losses"] main.layout,
 body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }.bode { grid-area: schem; }
-.design { grid-area: theory; }
 #bodeWrap { position: relative; }
 #bode { width: 100%; display: block; touch-action: none; }
 
@@ -321,10 +331,21 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   .scopeWrap { display: flex; flex-direction: column; }
   .scopeWrap > * { flex: none; }
   .scopeWrap > .screen { flex: 1 1 0; min-height: 180px; position: relative; }
+  .scopeWrap .curInfo { margin-top: 6px; font-size: 13px; }
+  .chanToggle { display: inline-block; }
+  .scopeWrap:not(.showCh) > .chanRow { display: none; }
+  body[data-page="control"] main.layout { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .bode { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "legend legend" "wrap wrap" "info fra"; column-gap: 12px; }
+  .bode > h2 { display: none; }
+  .bode > .bodeLegend { grid-area: legend; font-size: 13px; }
+  .bode > .fraBar { grid-area: fra; margin: 6px 0 0; align-self: start; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .bode > #bodeInfo { font-size: 12px; }
+  .bode > #bodeWrap { grid-area: wrap; min-height: 140px; }
+  .bode > #bodeInfo { grid-area: info; }
+  .insp { display: flex; flex-direction: column; padding-top: 8px; }
+  .insp > .tabs { position: sticky; top: -8px; background: var(--panel); z-index: 1; padding-top: 4px; }
   .screen canvas { position: absolute; inset: 0; }
-  .bode { display: flex; flex-direction: column; }
-  .bode > * { flex: none; }
-  .bode > #bodeWrap { flex: 1 1 0; min-height: 160px; }
   #bode { position: absolute; inset: 0; }
   main.dlayout { grid-template-rows: minmax(0, 1fr); }
   main.dlayout > .panel { align-self: stretch; }
