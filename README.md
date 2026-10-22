@@ -5,7 +5,7 @@ power stage, watch the switching waveforms on a 4-channel scope, see where the l
 design the control loop.**
 
 - Live site: <https://natchpai.github.io/converter-lab/>
-- Source: <https://github.com/Natchpai/converter-lab.github.io>
+- Source: <https://github.com/Natchpai/converter-lab>
 
 ## Overview
 
