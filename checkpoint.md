@@ -351,8 +351,8 @@ split by section and diffed against the main files; only the extra functions wer
   size 3x the CSS size and opaque corner for scope, Bode and efficiency; print waits until the
   report pictures are loaded); browser selftest ALL PASS.
 - NOT_VERIFIED: real touch drags, Firefox and Safari rendering of the range slider styles,
-  printing on a real printer and A4 paper (the print-wait fix is checked only with a stubbed
-  `window.print`), real file dialogs.
+  printing on a real printer and A4 paper, real file dialogs. (Printed reports with all
+  pictures were checked by hand in the browser after the print-wait fix.)
 
 ## Formula notes
 
