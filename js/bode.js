@@ -49,7 +49,8 @@ function decadeLabel(f) {
 // opt: { markers: [{ f, text }], shadeFrom, hoverF, handles: [{ f, db, kind: 'zero'|'pole'|'gain', color }],
 //        dots: [{ f, mag, ph, color }] (measured points, drawn as squares) }
 function bodeDraw(cv, data, opt = {}) {
-  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, k = dpr;
+  // text, margins and lines grow on a large plot (1 up to about 900 x 420 CSS px, at most 1.4)
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, k = dpr * clamp(Math.min(W / dpr / 900, H / dpr / 420), 1, 1.4);
   const cs = getComputedStyle(document.documentElement), tok = n => cs.getPropertyValue(n).trim();
   const ink = tok('--ink'), muted = tok('--muted'), line = tok('--line'), soft = tok('--soft');
   const ml = BODE.ml * k, mr = BODE.mr * k, mt = BODE.mt * k, gap = BODE.gap * k, mb = BODE.mb * k;
