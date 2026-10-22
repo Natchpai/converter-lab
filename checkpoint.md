@@ -324,8 +324,18 @@ split by section and diffed against the main files; only the extra functions wer
 - After the fixes: Node tests identical apart from run times; UI test 81 checks ALL PASS (new:
   inspector tabs, Channels button, disabled header groups, sections stay closed); browser
   selftest ALL PASS; all 28 assets load over http under a subpath with matching case.
-- NOT_VERIFIED: real mouse and touch drags, Firefox and Safari rendering of the range slider
-  styles, real printing.
+- Upgrades after the review: smaller title below 860 px window height; tab title fixed;
+  Channels button folds the channel cards at every width; scope text/lines scale 1x to 1.6x
+  and Bode 1x to 1.4x with the plot size (1x on normal screens); first-visit guide;
+  Losses and Control print reports (shared `printReport` / `lightImage` / `kvRows` in
+  `js/ui.js`, charts drawn at a fixed size in the light theme); print uses the light color
+  scheme. Design print: Operating points on page 2, header rows in `<thead>`, blue style.
+- Checks: Node tests identical apart from run times; UI test 84 checks ALL PASS (new: guide,
+  Losses and Control print reports incl. theme and scope screen restored); browser selftest
+  ALL PASS; Design, Losses and Control reports printed to PDF with headless Chrome from Night
+  theme (white paper, light charts, sections not split).
+- NOT_VERIFIED: real touch drags, Firefox and Safari rendering of the range slider styles,
+  printing on a real printer and A4 paper.
 
 ## Formula notes
 

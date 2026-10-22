@@ -35,6 +35,9 @@ or a phone the page scrolls as usual, plots first.
   capacitance that rings in DCM.
 - Scope export as CSV and PNG. The scope screen can be dark (default) or light; light is
   handy for pictures in reports.
+- Printed reports on white paper: the Design summary, a Losses report (loss tables and
+  efficiency chart) and a Control report (compensator, loop margins, step response, Bode plot,
+  scope and op-amp values). Charts print in the light colors, also from Night theme.
 - Compensators P, I, PI, Type 2 and Type 3, with k-factor auto design for a target
   crossover and phase margin.
 - Bode plot of plant, compensator, loop gain, closed loop and closed-loop Zout, with
@@ -62,7 +65,12 @@ browser (works from `file://`).
 - **Sections:** click a sidebar heading to fold or unfold it.
 - **Tabs:** theory, measurements, equations, mode map, loop results, op-amp values and tips
   are tabs in the panel next to the schematic or Bode plot.
-- **Channels:** the channel settings of the scope fold behind the **Channels** button.
+- **Getting started:** a first-visit guide under the header walks through Design, Converter,
+  Losses and Control; each step opens its page. The **Guide** button shows it again.
+- **Channels:** the channel settings of the scope fold behind the **Channels** button (also on
+  phones).
+- **Large screens:** the scope and Bode text and lines grow with the plot size; on a short
+  window the title gets smaller to leave room for the plots.
 - **Header:** buttons that do not apply to the current page are greyed out, not hidden.
 - Panel sizes, open tabs, the theme and the scope screen color are kept in the browser
   (localStorage).
