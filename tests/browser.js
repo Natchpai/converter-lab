@@ -39,8 +39,8 @@ try {
       try { dom = run(['--dump-dom', page + '?' + cmd], exe); } catch { dom = ''; }
       if (dom.length) { console.error('browser:', path.basename(exe)); break; }
     }
-    const m = dom.match(/<div id="selftest">([\s\S]*?)<\/div>/);
-    const txt = m ? m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '(no #selftest output)';
+    const m = dom.match(/<(\w+)[^>]*\bid="selftest"[^>]*>([\s\S]*?)<\/\1>/);
+    const txt = m ? m[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '(no #selftest output)';
     console.log(txt);
     code = /ALL PASS/.test(txt) ? 0 : 1;
   } else if (cmd === 'shot') {

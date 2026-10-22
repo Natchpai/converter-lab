@@ -55,6 +55,9 @@ Se = 0 number is an unstable limit cycle and moves with float-level changes.
   Do not name a split variable like a style token (`--r` is the radius).
 - Header option groups never hide: groups that do not apply are disabled in `setPage`
   (`simOpt`, `convOpt`), so the header does not shift between pages.
+- `#selftest` (test output of `?selftest` / `?uitest`) is a block after the mains, outside any
+  page, so it shows on every page; `tests/browser.js` reads it from the dumped DOM by id.
+- The shell media query is `screen` only, so printing never gets the fixed-height layout.
 - Published on GitHub Pages under a subpath: keep asset paths relative and file names in exact case.
 
 ## Architecture (Control page)

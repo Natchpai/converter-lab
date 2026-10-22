@@ -314,7 +314,17 @@ split by section and diffed against the main files; only the extra functions wer
   sliders, collapsible sections. Footer text moved to "About the model" in the sidebar.
 - Checks: `node tests/run.js --strip` identical to before except run times; UI test 79 checks
   ALL PASS. Screenshots at 1920x1080, 1366x768, 600 and 500 px, light and dark.
-- NOT_VERIFIED: real touch input, Firefox and Safari rendering of the range slider styles.
+- Pre-publish review (two independent reviews of `main..HEAD`), fixed:
+  test output hidden on Design/Losses (`#selftest` moved out of the sidebar), Non-ideal section
+  reopening on every click, drag handles stuck after right-click or lost capture, ~6 px jump at
+  drag start, Bode plot resizing while hovering (fixed-height readout), sidebar cap not applied
+  to hidden pages, shell layout applying to print, Control button groups not wrapping (dead
+  `.ctlBlock` rule), ARIA values and tab/panel links, dead CSS.
+- After the fixes: Node tests identical apart from run times; UI test 81 checks ALL PASS (new:
+  inspector tabs, Channels button, disabled header groups, sections stay closed); browser
+  selftest ALL PASS; all 28 assets load over http under a subpath with matching case.
+- NOT_VERIFIED: real mouse and touch drags, Firefox and Safari rendering of the range slider
+  styles, real printing.
 
 ## Formula notes
 

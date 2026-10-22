@@ -214,13 +214,14 @@ details.sec > summary::before, details.about > summary::before {
 details[open].sec > summary::before, details[open].about > summary::before { transform: rotate(45deg); }
 details.sec > summary:hover, details.about > summary:hover { color: var(--ink); }
 details.about { margin-top: 10px; color: var(--muted); font-size: var(--fs-s); }
-#selftest { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
+#selftest { white-space: pre-wrap; font-family: var(--mono); font-size: 14px; margin: 0 12px 12px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+#selftest:empty { display: none; }
 
 /* ---- page switch: Design | Converter | Losses | Control ---- */
 body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { display: none !important; }
 body:not([data-page="design"]) .designOnly, body:not([data-page="losses"]) .lossOnly { display: none !important; }
-body[data-page="design"] main.layout, body[data-page="losses"] main.layout,
-body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }
+body[data-page="design"] main.layout, body[data-page="losses"] main.layout { display: none !important; }
 .bode { grid-area: schem; }
 #bodeWrap { position: relative; }
 #bode { width: 100%; display: block; touch-action: none; }
@@ -247,8 +248,7 @@ body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: 
 /* ---- control page panels ---- */
 body[data-page="control"] #row-D, body[data-page="control"] #row-td,
 body[data-page="control"] #row-Vbd, body[data-page="control"] #row-Cn { display: none; }
-.ctlBlock { margin: 4px 0 14px; }
-.ctlBlock .seg { margin: 2px 0 10px; flex-wrap: wrap; }
+details.sec .seg.small { margin: 2px 0 10px; flex-wrap: wrap; }
 .seg button:disabled { opacity: .45; cursor: not-allowed; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; margin: 4px 0 10px; }
 .kv span:nth-child(odd) { color: var(--muted); }
@@ -260,7 +260,6 @@ body[data-page="control"] #row-Vbd, body[data-page="control"] #row-Cn { display:
 .note { font-size: 14px; color: var(--muted); margin: 4px 0 8px; }
 .prow .db { font-size: 13px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; margin-left: 6px; }
 #opampSvg svg { width: 100%; max-width: 560px; height: auto; display: block; }
-.designGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 18px; }
 svg tspan.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; fill: var(--muted); }
 .trEv { display: flex !important; width: 100%; margin-bottom: 8px; }
 .trEv select { flex: 1; min-width: 0; }
@@ -322,7 +321,7 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
 
 /* ---- app shell: on a large window the page fits the window, the sidebar and panels scroll
    on their own, and the scope and Bode plot fill the space they get ---- */
-@media (min-width: 1100px) and (min-height: 600px) {
+@media screen and (min-width: 1100px) and (min-height: 600px) {
   body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   header.top { flex: none; position: static; }
   main.layout, main.dlayout, main.llayout {
@@ -358,7 +357,8 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   .bode > h2 { display: none; }
   .bode > .bodeLegend { grid-area: legend; font-size: 13px; }
   .bode > .fraBar { grid-area: fra; margin: 6px 0 0; align-self: start; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .bode > #bodeInfo { font-size: 12px; }
+  .bode > #bodeInfo { font-size: 12px; height: 4.6em; min-height: 0; overflow: auto; }
+  #selftest { flex: none; max-height: 35vh; }
   .bode > #bodeWrap { grid-area: wrap; min-height: 140px; }
   .bode > #bodeInfo { grid-area: info; }
   .insp { display: flex; flex-direction: column; padding-top: 8px; }

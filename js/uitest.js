@@ -176,6 +176,34 @@ function runUiTests() {
     if (setSideWidth(m, 100) !== 240 || m.style.getPropertyValue('--side') !== '240px') throw new Error('sidebar not clamped at 240 px');
     setScopeSplit(f0); setColSplit(c0); setSideWidth(m, w0);
   });
+  step('Inspector tabs and Channels button', () => {
+    const shown = () => [...document.querySelectorAll('#inspector [data-pane]')].filter(p => !p.hidden).map(p => p.dataset.pane).join();
+    showTab('map');
+    if (shown() !== 'map') throw new Error(`converter panes shown: ${shown()}`);
+    click('[data-group="page"] [data-v="control"]');
+    showTab('map');
+    if (shown() !== 'loop') throw new Error(`control panes shown: ${shown()}`);
+    click('[data-group="page"] [data-v="converter"]');
+    showTab(savedTab());
+    const sw = $('.scopeWrap'), on0 = sw.classList.contains('showCh');
+    click('#chanBtn');
+    if (sw.classList.contains('showCh') === on0 || $('#chanBtn').getAttribute('aria-expanded') !== String(!on0)) throw new Error('Channels button did not toggle');
+    click('#chanBtn');
+  });
+  step('Header groups disabled on Design, sections stay closed', () => {
+    const ni = state.nonideal, topo = state.topo;
+    click('[data-group="page"] [data-v="design"]');
+    if (!$('[data-group="nonideal"] button').disabled || !$('[data-group="view"] button').disabled) throw new Error('Model/View not disabled on Design');
+    click('[data-group="page"] [data-v="converter"]');
+    if ($('[data-group="nonideal"] button').disabled || $('[data-group="view"] button').disabled) throw new Error('Model/View disabled on Converter');
+    click('[data-group="nonideal"] [data-v="1"]');
+    if (!$('#secNonIdeal').open) throw new Error('Non-ideal section not opened');
+    $('#secNonIdeal').open = false;
+    click(`[data-group="topo"] [data-v="${topo === 'boost' ? 'buck' : 'boost'}"]`);
+    if ($('#secNonIdeal').open) throw new Error('Non-ideal section reopened');
+    click(`[data-group="topo"] [data-v="${topo}"]`);
+    click(`[data-group="nonideal"] [data-v="${ni ? 1 : 0}"]`);
+  });
   step('Design save and load JSON', () => {
     click('[data-group="page"] [data-v="design"]');
     click('#dSave');

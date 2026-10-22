@@ -35,7 +35,6 @@ function syncAllParams() { for (const k in PDEF) syncParam(k); }
 
 function updateNonIdealUI() {
   $('#nonIdealHint').style.display = state.nonideal ? 'none' : '';
-  if (state.nonideal) $('#secNonIdeal').open = true;
   for (const d of NONIDEAL) {
     const row = $('#row-' + d.k);
     const hidden = (d.only === 'sync' && !state.sync) || (d.only === 'async' && state.sync);
@@ -105,6 +104,7 @@ document.querySelectorAll('.seg[data-group]').forEach(g => {
     const grp = g.dataset.group, v = b.dataset.v;
     if (grp === 'page') { setPage(v); return; }
     if (grp === 'nonideal' || grp === 'sync') state[grp] = v === '1'; else state[grp] = v;
+    if (grp === 'nonideal' && state.nonideal) $('#secNonIdeal').open = true;
     if (grp === 'view') { state.hpos = v === 'steady' ? 0.1 : 0; $('#hposRange').value = state.hpos; state.tdiv = 'auto'; $('#tdivSel').value = 'auto'; }
     if (grp === 'topo' || grp === 'sync') { buildSchem(); buildSpecUI(); buildCompUI(); requestDesign(); }
     if (grp === 'layout') { updateChannelUI(); updateSegs(); renderLive(); return; }
@@ -124,7 +124,7 @@ function setPage(pg, noCompute) {
   const sim = pg === 'converter' || pg === 'control';
   document.querySelectorAll('.simOpt button').forEach(b => { b.disabled = !sim; });
   if (pg === 'control') document.querySelectorAll('.convOpt button').forEach(b => { b.disabled = true; });
-  updateSegs();
+  updateSegs(); applySide();
   if (pg === 'design') { if (designDirty) requestDesign(); return; }
   if (pg === 'losses') { sizeCanvas(effCv, 320); drawEff(); requestLosses(); return; }
   if (pg !== state.simPage) {
@@ -156,20 +156,29 @@ function loadNum(key, def) {
 }
 function saveNum(key, v) { try { localStorage.setItem(key, String(v)); } catch (e) { /* storage blocked */ } }
 function dropKey(key) { try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ } }
-// o.start() measures the panels when a drag starts, o.value(ctx, e) turns the pointer into a value,
-// o.set(v, save) applies and returns the clamped value, o.get() the current one.
+// o.start() measures the panels when a drag starts, o.value(ctx, pos) turns the position of the
+// handle's left/top edge into a value, o.set(v, save) applies and returns the clamped value,
+// o.get() the current one.
 function bindSplitter(el, o) {
   let drag = null;
+  const edge = e => ({ clientX: e.clientX - drag.dx, clientY: e.clientY - drag.dy });
   el.addEventListener('pointerdown', e => {
-    drag = { ctx: o.start(), v: o.get(), moved: false };
+    if (e.button !== 0) return;
+    const r = el.getBoundingClientRect();
+    drag = { ctx: o.start(), v: o.get(), moved: false, dx: e.clientX - r.left, dy: e.clientY - r.top };
     el.classList.add('drag');
     try { el.setPointerCapture(e.pointerId); } catch (_) { /* synthetic event */ }
     e.preventDefault();
   });
-  el.addEventListener('pointermove', e => { if (drag) { drag.v = o.set(o.value(drag.ctx, e)); drag.moved = true; } });
   const end = () => { if (!drag) return; if (drag.moved) o.set(drag.v, true); drag = null; el.classList.remove('drag'); };
+  el.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!(e.buttons & 1)) { end(); return; }
+    drag.v = o.set(o.value(drag.ctx, edge(e))); drag.moved = true;
+  });
   el.addEventListener('pointerup', end);
   el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
   el.addEventListener('dblclick', o.reset);
   el.addEventListener('keydown', e => {
     const d = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
@@ -231,16 +240,21 @@ document.querySelectorAll('.vside').forEach(el => {
   const m = el.parentElement;
   const reset = () => { dropKey('dcdc-side-' + m.id); setSideWidth(m, sideWidth(m)); };
   bindSplitter(el, {
-    start: () => m.getBoundingClientRect().left + parseFloat(getComputedStyle(m).paddingLeft) + 6,
+    start: () => m.getBoundingClientRect().left + parseFloat(getComputedStyle(m).paddingLeft),
     value: (x0, e) => e.clientX - x0,
     get: () => parseFloat(m.style.getPropertyValue('--side')) || sideWidth(m),
     set: (w, save) => setSideWidth(m, w, save), reset, step: 16,
   });
 });
+// The width cap depends on the page width, so apply it again for the visible layout.
+function applySide() {
+  document.querySelectorAll('.vside').forEach(el => { const m = el.parentElement; if (m.clientWidth) setSideWidth(m, sideWidth(m)); });
+}
 function applySplits() {
   document.querySelectorAll('.vside').forEach(el => setSideWidth(el.parentElement, sideWidth(el.parentElement)));
-  setScopeSplit(scopeSplit()); setColSplit(colSplit());
+  applySide(); setScopeSplit(scopeSplit()); setColSplit(colSplit());
 }
+window.addEventListener('resize', applySide);
 
 /* ---------- inspector tabs (Converter and Control pages) ---------- */
 const TABS = { converter: ['theory', 'meas', 'eq', 'map', 'tips'], control: ['loop', 'meas', 'amp', 'notes'] };
@@ -336,7 +350,7 @@ function sizeCanvas(cv, cssH) {
 // Draw right away after resizing: setting canvas.width clears it, and waiting for the
 // next animation frame would show one blank frame.
 // App shell (css/app.css): on a large window the screen gets its height from the layout.
-const SHELL = window.matchMedia('(min-width: 1100px) and (min-height: 600px)');
+const SHELL = window.matchMedia('screen and (min-width: 1100px) and (min-height: 600px)');
 function resize() {
   const w = els.screen.clientWidth;
   sizeCanvas(els.scope, SHELL.matches ? Math.max(120, els.screen.clientHeight) : Math.round(clamp(w * 0.56, 260, 560)));

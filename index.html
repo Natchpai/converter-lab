@@ -53,7 +53,7 @@
       <div id="compList"></div>
     </details>
   </aside>
-  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
+  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin="240" aria-valuemax="560" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
 
   <section class="panel dres">
     <div class="workHead">
@@ -105,7 +105,7 @@
       <ul class="tips" id="lTips"></ul>
     </details>
   </aside>
-  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
+  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin="240" aria-valuemax="560" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
   <section class="panel lwork">
     <div class="lgrid">
       <div>
@@ -154,10 +154,9 @@
       shooting (Newton) method on one switching period. Startup starts from i<sub>L</sub> = 0, v<sub>C</sub> = 0. Theory uses ideal parts and the
       small-ripple approximation. Non-ideal mode adds dead time with body diodes and a switch-node capacitance that rings in DCM.
       Switching, reverse recovery, gate and core (iGSE) losses are computed from the simulated waveforms on the Losses page.</p>
-      <div id="selftest"></div>
     </details>
   </aside>
-  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
+  <div class="splitter v vside" role="separator" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin="240" aria-valuemax="560" tabindex="0" title="Drag to resize the sidebar. Double-click to reset."></div>
 
   <section class="scopeWrap panel">
     <div class="scopeHead">
@@ -202,43 +201,44 @@
     <div class="info" id="schemInfo"></div>
   </section>
 
-  <section class="bode panel ctlOnly" id="bodePanel">
+  <section class="bode panel ctlOnly" id="bodePanel" aria-label="Bode plot">
     <h2>Bode plot</h2>
     <div id="bodeWrap"><canvas id="bode" aria-label="Bode plot of the control loop"></canvas></div>
     <div id="bodeInfo"></div>
   </section>
 
-  <div class="splitter v vcols" id="colSplit" role="separator" aria-orientation="vertical" aria-label="Panel width" tabindex="0" title="Drag to resize the panels. Double-click to reset."></div>
+  <div class="splitter v vcols" id="colSplit" role="separator" aria-orientation="vertical" aria-label="Panel width" aria-valuemin="25" aria-valuemax="75" tabindex="0" title="Drag to resize the panels. Double-click to reset."></div>
 
   <section class="insp panel" id="inspector">
     <div class="tabs" id="inspTabs" role="tablist" aria-label="Details">
-      <button role="tab" class="convOnly" data-tab="theory">Theory vs sim</button><button role="tab" class="ctlOnly" data-tab="loop">Loop</button><button role="tab" data-tab="meas">Measure</button><button role="tab" class="convOnly" data-tab="eq">Equations</button><button role="tab" class="convOnly" data-tab="map">Mode map</button><button role="tab" class="ctlOnly" data-tab="amp">Op-amp</button><button role="tab" class="convOnly" data-tab="tips">Tips</button><button role="tab" class="ctlOnly" data-tab="notes">Tips</button>
+      <button role="tab" class="convOnly" data-tab="theory" aria-controls="pane-theory">Theory vs sim</button><button role="tab" class="ctlOnly" data-tab="loop" aria-controls="ctlLoop">Loop</button><button role="tab" data-tab="meas" aria-controls="pane-meas">Measure</button><button role="tab" class="convOnly" data-tab="eq" aria-controls="pane-eq">Equations</button><button role="tab" class="convOnly" data-tab="map" aria-controls="pane-map">Mode map</button><button role="tab" class="ctlOnly" data-tab="amp" aria-controls="ctlAmp">Op-amp</button><button role="tab" class="convOnly" data-tab="tips" aria-controls="pane-tips">Tips</button><button role="tab" class="ctlOnly" data-tab="notes" aria-controls="pane-notes">Tips</button>
     </div>
-    <div class="tabPane" role="tabpanel" data-pane="theory">
+    <div class="tabPane" role="tabpanel" data-pane="theory" id="pane-theory">
       <div class="tblWrap"><table class="data" id="cmpTbl"></table></div>
       <p class="warn" id="simWarn"></p>
     </div>
     <div class="tabPane" role="tabpanel" data-pane="loop" id="ctlLoop"></div>
-    <div class="tabPane" role="tabpanel" data-pane="meas">
+    <div class="tabPane" role="tabpanel" data-pane="meas" id="pane-meas">
       <div class="tblWrap"><table class="data" id="measTbl"></table></div>
       <p class="hint convOnly">Drag on the screen to move cursor C1 (near C2 to move C2). The circuit follows C1.
         Measurements use one full period in steady state, or the visible window in startup.</p>
       <p class="hint ctlOnly">Drag on the screen to move cursor C1 (near C2 to move C2). Measurements use the visible window.</p>
     </div>
-    <div class="tabPane" role="tabpanel" data-pane="eq">
+    <div class="tabPane" role="tabpanel" data-pane="eq" id="pane-eq">
       <h3>Ideal, small-ripple</h3>
       <table class="eq" id="eqTbl"></table>
     </div>
-    <div class="tabPane" role="tabpanel" data-pane="map">
+    <div class="tabPane" role="tabpanel" data-pane="map" id="pane-map">
       <h3>K = 2L/(R·T<sub>s</sub>) vs D (click to set D and R)</h3>
       <div><canvas id="modemap" aria-label="CCM and DCM mode map"></canvas></div>
     </div>
     <div class="tabPane" role="tabpanel" data-pane="amp" id="ctlAmp"></div>
-    <div class="tabPane" role="tabpanel" data-pane="tips"><ul class="tips" id="tips"></ul></div>
-    <div class="tabPane" role="tabpanel" data-pane="notes"><ul class="tips" id="ctlTips"></ul></div>
+    <div class="tabPane" role="tabpanel" data-pane="tips" id="pane-tips"><ul class="tips" id="tips"></ul></div>
+    <div class="tabPane" role="tabpanel" data-pane="notes" id="pane-notes"><ul class="tips" id="ctlTips"></ul></div>
   </section>
 </main>
 
+<section class="testOut" id="selftest" aria-label="Test results"></section>
 <div id="printArea"></div>
 
 <script src="js/params.js"></script>
