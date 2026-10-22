@@ -297,8 +297,9 @@ split by section and diffed against the main files; only the extra functions wer
   page, split and overlay views.
 
 ### UX rework: app shell (branch `feat/ux-shell`)
-- Header: two rows (title, page tabs, theme / topology, rectifier, model, view). Option groups
-  are disabled, not hidden, on pages where they do not apply, so nothing shifts.
+- Header: big title (54 px) with the subtitle under it and the theme switch on the right, the
+  page tabs as an underlined strip below the title, then the option groups. Option groups are
+  disabled, not hidden, on pages where they do not apply, so nothing shifts.
 - App shell at >= 1100x600 px: the page fits the window, sidebar and panels scroll on their
   own. On Control all sliders (mode, compensator, design helper, circuit, transient) are in
   the sidebar, so the scope and Bode plot stay in view while tuning.
