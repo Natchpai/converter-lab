@@ -240,7 +240,7 @@ body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: 
 .fraBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
 .fraMsg { font-size: 14px; color: var(--muted); }
 #bodeInfo { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 2.9em; white-space: pre-wrap; }
-@media (min-width: 1251px) {
+@media (min-width: 1251px) and (max-height: 599.98px) {
   body[data-page="control"] main.layout { grid-template-columns: 310px minmax(0, 1.4fr) minmax(0, 1fr); }
 }
 
@@ -330,18 +330,22 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   }
   main.layout > .panel, main.dlayout > .panel, main.llayout > .panel { min-height: 0; overflow: auto; }
   main.layout {
-    grid-template-columns: 320px minmax(0, 1.2fr) minmax(0, 1fr); row-gap: 0;
+    gap: 0;
+    grid-template-columns: var(--side, 320px) 12px minmax(0, var(--cl, 1.2fr)) 12px minmax(0, var(--cr, 1fr));
     grid-template-rows: minmax(0, var(--top, 1.3fr)) 12px minmax(0, var(--bot, 1fr));
-    grid-template-areas: "ctl scope scope" "ctl split split" "ctl schem theory";
+    grid-template-areas: "ctl vside scope scope scope" "ctl vside split split split" "ctl vside schem vcols theory";
   }
   .splitter { display: block; grid-area: split; cursor: row-resize; touch-action: none; position: relative; }
+  .splitter.v { cursor: col-resize; }
+  .splitter.vside { grid-area: vside; }
+  .splitter.vcols { grid-area: vcols; }
+  .splitter.v::after { left: 4px; top: 50%; width: 4px; height: 44px; margin: -22px 0 0; }
   .splitter::after {
     content: ""; position: absolute; left: 50%; top: 4px; width: 44px; height: 4px; margin-left: -22px;
     border-radius: 2px; background: var(--line); transition: background .12s;
   }
   .splitter:hover::after, .splitter:focus-visible::after, .splitter.drag::after { background: var(--accent); }
   .splitter:focus-visible { outline: none; }
-  body[data-page="control"] main.layout { grid-template-columns: 320px minmax(0, 1.4fr) minmax(0, 1fr); }
   .controls { align-self: stretch; }
   .scopeWrap { display: flex; flex-direction: column; }
   .scopeWrap > * { flex: none; }
@@ -361,8 +365,11 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   .insp > .tabs { position: sticky; top: -8px; background: var(--panel); z-index: 1; padding-top: 4px; }
   .screen canvas { position: absolute; inset: 0; }
   #bode { position: absolute; inset: 0; }
-  main.dlayout { grid-template-rows: minmax(0, 1fr); }
+  main.dlayout { gap: 0; grid-template-rows: minmax(0, 1fr); grid-template-columns: var(--side, 340px) 12px minmax(0, 1fr);
+    grid-template-areas: "side vside res"; }
   main.dlayout > .panel, main.llayout > .panel { align-self: stretch; }
   .workHead { position: sticky; top: -12px; z-index: 1; background: var(--panel); margin: -12px -12px 4px; padding: 12px 12px 8px; }
-  main.llayout { grid-template-rows: minmax(0, 1fr); }
+  main.llayout { gap: 0; grid-template-rows: minmax(0, 1fr); grid-template-columns: var(--side, 320px) 12px minmax(0, 1fr);
+    grid-template-areas: "side vside work"; }
+  .lside { grid-area: side; } .lwork { grid-area: work; }
 }

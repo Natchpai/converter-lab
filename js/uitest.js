@@ -165,12 +165,16 @@ function runUiTests() {
     const c = uiDownloads.find(d => /\.csv$/.test(d.n));
     if (!c || c.b.type !== 'text/csv' || c.b.size < 1000) throw new Error('no CSV download');
   });
-  step('Scope height handle', () => {
-    const m = $('main.layout'), f0 = scopeSplit();
+  step('Panel handles', () => {
+    const m = $('#page-sim'), f0 = scopeSplit(), c0 = colSplit(), w0 = sideWidth(m);
     setScopeSplit(0.7);
     if (m.style.getPropertyValue('--top') !== '0.700fr' || m.style.getPropertyValue('--bot') !== '0.300fr') throw new Error('rows not set');
     if (setScopeSplit(0.95) !== 0.8) throw new Error('no clamp at 0.8');
-    setScopeSplit(f0);
+    setColSplit(0.6);
+    if (m.style.getPropertyValue('--cl') !== '0.600fr' || m.style.getPropertyValue('--cr') !== '0.400fr') throw new Error('columns not set');
+    if (setColSplit(0.9) !== 0.75) throw new Error('no clamp at 0.75');
+    if (setSideWidth(m, 100) !== 240 || m.style.getPropertyValue('--side') !== '240px') throw new Error('sidebar not clamped at 240 px');
+    setScopeSplit(f0); setColSplit(c0); setSideWidth(m, w0);
   });
   step('Design save and load JSON', () => {
     click('[data-group="page"] [data-v="design"]');
