@@ -490,7 +490,7 @@ function polesText(poles) {
   return out.join(', ') || '–';
 }
 
-function sizeBode() { sizeCanvas(CTL.bode, 420); }
+function sizeBode() { sizeCanvas(CTL.bode, SHELL.matches ? Math.max(120, CTL.bode.parentElement.clientHeight) : 420); }
 function drawBode() {
   if (!CTL.data || !CTL.L) return;
   for (const c of CTL.data.curves) c.hidden = !CTL.show[c.id];

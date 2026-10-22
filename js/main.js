@@ -18,5 +18,5 @@ updateNonIdealUI();
 compute();
 resize();
 renderAll();
-if (/selftest/.test(location.search)) selfTest();
+if (/selftest/.test(location.search)) { $('.about').open = true; selfTest(); }
 else if (query.has('uitest')) uiTest();

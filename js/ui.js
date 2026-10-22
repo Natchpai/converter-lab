@@ -204,14 +204,18 @@ function sizeCanvas(cv, cssH) {
 }
 // Draw right away after resizing: setting canvas.width clears it, and waiting for the
 // next animation frame would show one blank frame.
+// App shell (css/app.css): on a large window the screen gets its height from the layout.
+const SHELL = window.matchMedia('(min-width: 1100px) and (min-height: 600px)');
 function resize() {
   const w = els.screen.clientWidth;
-  sizeCanvas(els.scope, Math.round(clamp(w * 0.56, 260, 560)));
+  sizeCanvas(els.scope, SHELL.matches ? Math.max(120, els.screen.clientHeight) : Math.round(clamp(w * 0.56, 260, 560)));
   if (RES && onSimPage()) renderLiveNow();
   drawPageCanvas(true);
 }
 new ResizeObserver(() => resize()).observe(els.screen);
 new ResizeObserver(() => drawPageCanvas(true)).observe(els.mm.parentElement);
+new ResizeObserver(() => drawPageCanvas(true)).observe($('#bodeWrap'));
+SHELL.addEventListener('change', () => resize());
 // The canvas of the side panel on the current page (mode map or Bode plot).
 function drawPageCanvas(resized) {
   if (!RES || !onSimPage()) return;

@@ -120,6 +120,14 @@
     <p class="hint" id="nonIdealHint">Select <b>Non-ideal</b> at the top to use these values.</p>
     <div id="nonIdealList"></div>
     <p class="hint ctlOnly">Dead time, body diodes and node capacitance are used on the Converter page only. The closed-loop simulation leaves them out.</p>
+    <details class="about">
+      <summary>About the model</summary>
+      <p>Model: switched piecewise-linear circuit (states i<sub>L</sub>, v<sub>C</sub>) integrated with RK4. Steady state is found with a
+      shooting (Newton) method on one switching period. Startup starts from i<sub>L</sub> = 0, v<sub>C</sub> = 0. Theory uses ideal parts and the
+      small-ripple approximation. Non-ideal mode adds dead time with body diodes and a switch-node capacitance that rings in DCM.
+      Switching, reverse recovery, gate and core (iGSE) losses are computed from the simulated waveforms on the Losses page.</p>
+      <div id="selftest"></div>
+    </details>
   </aside>
 
   <section class="scopeWrap panel">
@@ -191,13 +199,6 @@
   </section>
 </main>
 
-<footer>
-  Model: switched piecewise-linear circuit (states i<sub>L</sub>, v<sub>C</sub>) integrated with RK4. Steady state is found with a
-  shooting (Newton) method on one switching period. Startup starts from i<sub>L</sub> = 0, v<sub>C</sub> = 0. Theory uses ideal parts and the
-  small-ripple approximation. Non-ideal mode adds dead time with body diodes and a switch-node capacitance that rings in DCM.
-  Switching, reverse recovery, gate and core (iGSE) losses are computed from the simulated waveforms on the Losses page.
-  <div id="selftest"></div>
-</footer>
 <div id="printArea"></div>
 
 <script src="js/params.js"></script>
