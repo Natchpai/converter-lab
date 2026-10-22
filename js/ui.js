@@ -124,7 +124,7 @@ function setPage(pg, noCompute) {
   const sim = pg === 'converter' || pg === 'control';
   document.querySelectorAll('.simOpt button').forEach(b => { b.disabled = !sim; });
   if (pg === 'control') document.querySelectorAll('.convOpt button').forEach(b => { b.disabled = true; });
-  updateSegs(); applySide();
+  updateSegs(); applySide(); markGuide();
   if (pg === 'design') { if (designDirty) requestDesign(); return; }
   if (pg === 'losses') { sizeCanvas(effCv, 320); drawEff(); requestLosses(); return; }
   if (pg !== state.simPage) {
@@ -138,6 +138,18 @@ function setPage(pg, noCompute) {
   buildChannels(); updateNonIdealUI(); showTab(savedTab()); setScopeSplit(scopeSplit()); setColSplit(colSplit());
   if (!noCompute) requestCompute();
 }
+
+/* ---------- first-visit guide: shown until "Got it", the Guide button shows it again ---------- */
+function markGuide() { document.querySelectorAll('#guide [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === state.page)); }
+function showGuide(on) {
+  $('#guide').hidden = !on;
+  $('#guideBtn').setAttribute('aria-expanded', String(on));
+  markGuide();
+}
+$('#guide').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) setPage(b.dataset.go); });
+$('#guideOk').addEventListener('click', () => { showGuide(false); saveNum('dcdc-guide', 1); });
+$('#guideBtn').addEventListener('click', () => showGuide($('#guide').hidden));
+showGuide(loadNum('dcdc-guide', 0) !== 1);
 
 /* ---------- channel settings: folded behind a button in the app shell ---------- */
 function setChanOpen(on, save) {

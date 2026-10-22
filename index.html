@@ -17,8 +17,11 @@
       <h1>DC-DC Converter Lab</h1>
       <span>Buck, Boost and Buck-Boost in CCM and DCM, with a 4-channel scope</span>
     </div>
-    <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
-      <button data-t="light">☀ Light</button><button data-t="dark">☾ Night</button>
+    <div class="topTools">
+      <button class="btn" id="guideBtn" aria-controls="guide" aria-expanded="false" title="Show the getting-started guide">Guide</button>
+      <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
+        <button data-t="light">☀ Light</button><button data-t="dark">☾ Night</button>
+      </div>
     </div>
   </div>
   <nav class="pageNav" aria-label="Pages">
@@ -39,6 +42,14 @@
     <div class="seg convOpt simOpt" data-group="view" role="group" aria-label="View">
       <button data-v="steady">Steady state</button><button data-v="startup">Startup</button>
     </div>
+  </div>
+  <div class="guide" id="guide" role="region" aria-label="Getting started" hidden>
+    <span class="gLead">New here?</span>
+    <button data-go="design"><b>1</b> Design: enter the spec, then Apply to simulation</button><span class="gArrow" aria-hidden="true">→</span>
+    <button data-go="converter"><b>2</b> Converter: check the waveforms</button><span class="gArrow" aria-hidden="true">→</span>
+    <button data-go="losses"><b>3</b> Losses: see the efficiency</button><span class="gArrow" aria-hidden="true">→</span>
+    <button data-go="control"><b>4</b> Control: design the loop</button>
+    <button class="btn primary" id="guideOk">Got it</button>
   </div>
 </header>
 

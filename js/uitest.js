@@ -190,6 +190,20 @@ function runUiTests() {
     if (sw.classList.contains('showCh') === on0 || $('#chanBtn').getAttribute('aria-expanded') !== String(!on0)) throw new Error('Channels button did not toggle');
     click('#chanBtn');
   });
+  step('First-visit guide', () => {
+    let saved = null;
+    try { saved = localStorage.getItem('dcdc-guide'); } catch (e) { /* storage blocked */ }
+    showGuide(true);
+    click('#guide [data-go="losses"]');
+    if (state.page !== 'losses' || !$('#guide [data-go="losses"]').classList.contains('on')) throw new Error('guide step did not open Losses');
+    click('#guide [data-go="converter"]');
+    click('#guideOk');
+    if (!$('#guide').hidden) throw new Error('Got it did not hide the guide');
+    click('#guideBtn');
+    if ($('#guide').hidden) throw new Error('Guide button did not show the guide');
+    try { if (saved === null) localStorage.removeItem('dcdc-guide'); } catch (e) { /* storage blocked */ }
+    showGuide(saved === null);
+  });
   step('Header groups disabled on Design, sections stay closed', () => {
     const ni = state.nonideal, topo = state.topo;
     click('[data-group="page"] [data-v="design"]');
