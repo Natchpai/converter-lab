@@ -296,6 +296,21 @@ split by section and diffed against the main files; only the extra functions wer
   (new: median screen brightness light > 200, dark < 60). Screenshots: light screen on a dark
   page, split and overlay views.
 
+### UX rework: app shell (branch `feat/ux-shell`)
+- Header: two rows (title, page tabs, theme / topology, rectifier, model, view). Option groups
+  are disabled, not hidden, on pages where they do not apply, so nothing shifts.
+- App shell at >= 1100x600 px: the page fits the window, sidebar and panels scroll on their
+  own. On Control all sliders (mode, compensator, design helper, circuit, transient) are in
+  the sidebar, so the scope and Bode plot stay in view while tuning.
+- Converter and Control share a tabbed inspector (Theory vs sim / Loop, Measure, Equations,
+  Mode map, Op-amp, Tips). Channel cards fold behind a Channels button in the shell.
+- Design and Losses use the same sidebar + workspace layout.
+- New style tokens (`--panel-2`, `--focus`, `--r`, `--fs`, `--fs-s`, `--mono`), slim range
+  sliders, collapsible sections. Footer text moved to "About the model" in the sidebar.
+- Checks: `node tests/run.js --strip` identical to before except run times; UI test 78 checks
+  ALL PASS. Screenshots at 1920x1080, 1366x768, 600 and 500 px, light and dark.
+- NOT_VERIFIED: real touch input, Firefox and Safari rendering of the range slider styles.
+
 ## Formula notes
 
 Web research could confirm only the Type 3 k-factor equations

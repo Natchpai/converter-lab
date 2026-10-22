@@ -219,7 +219,8 @@ details.about { margin-top: 10px; color: var(--muted); font-size: var(--fs-s); }
 body[data-page="control"] .convOnly, body:not([data-page="control"]) .ctlOnly { display: none !important; }
 body:not([data-page="design"]) .designOnly, body:not([data-page="losses"]) .lossOnly { display: none !important; }
 body[data-page="design"] main.layout, body[data-page="losses"] main.layout,
-body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }.bode { grid-area: schem; }
+body[data-page="design"] .simOnly, body[data-page="losses"] .simOnly { display: none !important; }
+.bode { grid-area: schem; }
 #bodeWrap { position: relative; }
 #bode { width: 100%; display: block; touch-action: none; }
 
