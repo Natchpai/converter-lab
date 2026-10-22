@@ -43,6 +43,10 @@ or a phone the page scrolls as usual, plots first.
 - Bode plot of plant, compensator, loop gain, closed loop and closed-loop Zout, with
   crossover, phase margin and gain margin. Zeros, poles and gain can be dragged on the plot.
 - Op-amp circuits with R/C values: the error amplifier, and the current amplifier in ACMC.
+- Save and load the control design as JSON (mode, compensator, current loop, targets, test
+  event and the circuit), and export the Bode curves as CSV (frequency, magnitude and phase of
+  every curve) for MATLAB or a spreadsheet. Both are in the Control page: Loop tab and Bode
+  panel.
 - Closed-loop switching simulation with load step, input step, reference step and
   soft-start; step-response numbers and extra scope signals (vc, ramp, duty, iref, ...).
 - PCMC with slope compensation and leading-edge blanking (pulses are skipped below the

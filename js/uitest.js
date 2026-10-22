@@ -265,6 +265,27 @@ function runUiTests() {
     click('[data-group="page"] [data-v="control"]');
     printed('#cPrint', /control report/, 2);
     if (state.scopeBg !== 'dark') throw new Error('scope screen not restored');
+  });
+  step('Control design save and load', () => {
+    const j = JSON.parse(JSON.stringify(controlJSON())), c0 = JSON.stringify(CTL.cfg), topo0 = state.topo;
+    click('#ctlMode [data-m="' + (CTL.cfg.mode === 'pcmc' ? 'vmc' : 'pcmc') + '"]');
+    applyControlJSON(j);
+    if (JSON.stringify(CTL.cfg) !== c0) throw new Error('settings not restored');
+    for (const k of COMP_TYPES[CTL.cfg.comp.type].keys) if (!$('#cc-sl-' + k)) throw new Error(`no row for ${k}`);
+    let msg = '';
+    try { applyControlJSON({ app: 'dcdc-converter-lab', specs: {} }); } catch (e) { msg = e.message; }
+    if (!/Design page/.test(msg)) throw new Error('a Design file was not rejected');
+    // a file for another topology keeps its compensator (no fresh auto design)
+    const k = JSON.parse(JSON.stringify(j));
+    k.topo = topo0 === 'boost' ? 'buck' : 'boost'; k.ctl.cfg.comp.fz1 = 1234;
+    applyControlJSON(k); compute();
+    if (state.topo !== k.topo || CTL.cfg.comp.fz1 !== 1234) throw new Error(`topology ${state.topo}, fz1 ${CTL.cfg.comp.fz1}`);
+    applyControlJSON(j); compute();
+    if (state.topo !== topo0 || JSON.stringify(CTL.cfg) !== c0) throw new Error('not restored after the topology test');
+  });
+  step('Bode CSV', () => {
+    const t = bodeCSV(), rows = t.trim().split('\n'), n = CTL.data.curves.length;
+    if (rows[0].split(',').length !== 1 + 2 * n || rows.length !== CTL.data.f.length + 1 || /NaN/.test(t)) throw new Error(`${rows.length} rows, header ${rows[0]}`);
     click('[data-group="page"] [data-v="losses"]');
   });
   window.removeEventListener('error', onErr);

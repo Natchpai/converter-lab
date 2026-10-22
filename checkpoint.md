@@ -334,8 +334,12 @@ split by section and diffed against the main files; only the extra functions wer
   Losses and Control print reports incl. theme and scope screen restored); browser selftest
   ALL PASS; Design, Losses and Control reports printed to PDF with headless Chrome from Night
   theme (white paper, light charts, sections not split).
+- Control design file: Save / Load design (JSON) in the Loop tab (`controlJSON`,
+  `applyControlJSON` in `js/control-ui.js`; known keys only, clamped to the slider ranges;
+  `CTL.topoKey` is set so a file for another topology keeps its compensator). Bode CSV button
+  in the Bode panel (`bodeCSV`, every curve of the current view). UI test 86 checks ALL PASS.
 - NOT_VERIFIED: real touch drags, Firefox and Safari rendering of the range slider styles,
-  printing on a real printer and A4 paper.
+  printing on a real printer and A4 paper, real file dialogs.
 
 ## Formula notes
 
