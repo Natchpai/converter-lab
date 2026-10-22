@@ -23,6 +23,11 @@ from a local file), with no build step and no dependencies. It has four pages:
   current-mode control (ACMC), designed on a Bode plot and checked with a closed-loop
   switching simulation.
 
+Every page has the same layout: inputs in a sidebar on the left, results on the right. On a
+large window (at least 1100 x 600 px) the page fits the window and the sidebar scrolls on its
+own, so the scope and the Bode plot stay in view while you drag a slider. On a small window
+or a phone the page scrolls as usual, plots first.
+
 ## Key Features
 
 - Ideal or non-ideal parts (ESR, inductor DCR, switch R<sub>on</sub>, diode drop),
@@ -48,6 +53,19 @@ from a local file), with no build step and no dependencies. It has four pages:
 
 Use the [live site](https://natchpai.github.io/converter-lab/), or open `index.html` in a
 browser (works from `file://`).
+
+### Layout tips
+
+- **Resize the panels:** drag the thin grips between panels: the scope height, the sidebar
+  width, and the split between the schematic or Bode plot and the tabs next to it. Double-click
+  a grip to reset it. A focused grip also moves with the arrow keys.
+- **Sections:** click a sidebar heading to fold or unfold it.
+- **Tabs:** theory, measurements, equations, mode map, loop results, op-amp values and tips
+  are tabs in the panel next to the schematic or Bode plot.
+- **Channels:** the channel settings of the scope fold behind the **Channels** button.
+- **Header:** buttons that do not apply to the current page are greyed out, not hidden.
+- Panel sizes, open tabs, the theme and the scope screen color are kept in the browser
+  (localStorage).
 
 URL options (add them to the page address):
 
