@@ -312,11 +312,30 @@ main.llayout { display: grid; gap: 12px; padding: 12px 16px 24px; max-width: 168
 details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 8px; }
 .sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 @media print {
+  @page { margin: 14mm 12mm; }
+  html, body { background: #fff !important; }
   body > *:not(#printArea) { display: none !important; }
-  #printArea { display: block; color: #000; font: 12px/1.4 system-ui, sans-serif; }
-  #printArea table { border-collapse: collapse; width: 100%; margin: 6px 0 12px; }
-  #printArea th, #printArea td { border: 1px solid #999; padding: 3px 6px; text-align: left; }
-  #printArea h1 { font-size: 18px; } #printArea h2 { font-size: 14px; color: #000; margin: 12px 0 4px; }
+  #printArea {
+    display: block; color: #000; background: #fff; font: 12px/1.4 system-ui, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  #printArea h1 { font-size: 19px; color: #1e3a8a; margin: 0 0 4px; padding-bottom: 6px; border-bottom: 2px solid #2563eb; }
+  #printArea h1 + p { color: #000; margin: 0 0 10px; }
+  #printArea h2 {
+    font-size: 13.5px; color: #1e3a8a; text-transform: none; letter-spacing: 0; margin: 14px 0 5px;
+    padding: 3px 0 3px 8px; border-left: 4px solid #2563eb; background: #eff6ff; break-after: avoid;
+  }
+  #printArea h2.newPage { break-before: page; margin-top: 0; }
+  #printArea table { border-collapse: collapse; width: 100%; margin: 4px 0 12px; }
+  #printArea thead { display: table-header-group; }
+  #printArea tr { break-inside: avoid; }
+  #printArea th, #printArea td { border: 1px solid #bfdbfe; padding: 3px 6px; text-align: left; color: #000; }
+  #printArea th { background: #dbeafe; font-weight: 600; }
+  #printArea tbody tr:nth-child(even) td { background: #f5f9ff; }
+  #printArea td small { color: #000; }
+  #printArea .chip { background: #fff !important; color: #000; border: 1.5px solid; padding: 0 6px; font-weight: 600; }
+  #printArea .chip.ok { border-color: #15803d; } #printArea .chip.warn { border-color: #d97706; }
+  #printArea .chip.bad { border-color: #dc2626; } #printArea .chip.na { border-color: #64748b; }
 }
 
 /* ---- app shell: on a large window the page fits the window, the sidebar and panels scroll
