@@ -38,22 +38,33 @@
 </header>
 
 <main class="dlayout designOnly" id="page-design">
-  <section class="panel dspec">
-    <h2>Specification</h2>
-    <div id="specList"></div>
-    <p class="hint" id="specNote"></p>
-  </section>
-
-  <section class="panel dcomp">
-    <h2>Components</h2>
-    <p class="hint">Generic classes fill in typical values. They are not real part numbers: type the values from your datasheets.</p>
-    <div id="compList"></div>
-  </section>
+  <aside class="panel dside">
+    <details class="sec" open>
+      <summary>Specification</summary>
+      <div id="specList"></div>
+      <p class="hint" id="specNote"></p>
+    </details>
+    <details class="sec" open>
+      <summary>Components</summary>
+      <p class="hint">Generic classes fill in typical values. They are not real part numbers: type the values from your datasheets.</p>
+      <div id="compList"></div>
+    </details>
+  </aside>
 
   <section class="panel dres">
-    <div class="dresHead">
-      <h2>Results</h2>
-      <span class="hint" id="dStatus"></span>
+    <div class="workHead">
+      <div class="dresHead">
+        <h2>Results</h2>
+        <span class="hint" id="dStatus"></span>
+      </div>
+      <div class="dActions">
+        <label>Corner <select id="dCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
+        <button class="btn primary" id="dApply">Apply to simulation</button>
+        <button class="btn" id="dSave">Save design (JSON)</button>
+        <button class="btn" id="dLoadBtn">Load design</button>
+        <input type="file" id="dLoad" accept=".json,application/json" hidden>
+        <button class="btn" id="dPrint">Print summary</button>
+      </div>
     </div>
     <div class="derr" id="dErr"></div>
     <h3>Sizing (worst case over V<sub>in</sub>)</h3>
@@ -62,14 +73,6 @@
     <div class="tblWrap"><table class="data" id="dCornerTbl"></table></div>
     <h3>Stress vs rating</h3>
     <div class="tblWrap"><table class="data" id="dRateTbl"></table></div>
-    <div class="dActions">
-      <label>Corner <select id="dCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
-      <button class="btn primary" id="dApply">Apply to simulation</button>
-      <button class="btn" id="dSave">Save design (JSON)</button>
-      <button class="btn" id="dLoadBtn">Load design</button>
-      <input type="file" id="dLoad" accept=".json,application/json" hidden>
-      <button class="btn" id="dPrint">Print summary</button>
-    </div>
     <h3>Design equations (ideal CCM)</h3>
     <table class="eq" id="dEqTbl"></table>
     <h3>Design notes</h3>
@@ -78,30 +81,45 @@
 </main>
 
 <main class="llayout lossOnly" id="page-losses">
-  <section class="panel">
-    <div class="dresHead"><h2>Loss breakdown</h2><span class="hint" id="lStatus"></span></div>
-    <div class="dActions">
-      <label>Source <select id="lSrc"><option value="design">Design corner</option><option value="sim">Converter page operating point</option></select></label>
-      <label id="lCornerWrap">Corner <select id="lCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
-      <label id="lLoadWrap">Load <input class="num" id="lLoad" type="text" value="100 %" style="width:84px" aria-label="Load in percent of Io max"></label>
+  <aside class="panel lside">
+    <details class="sec" open>
+      <summary>Operating point</summary>
+      <div class="dActions">
+        <label>Source <select id="lSrc"><option value="design">Design corner</option><option value="sim">Converter page operating point</option></select></label>
+        <label id="lCornerWrap">Corner <select id="lCorner"><option value="0">Vin min</option><option value="1" selected>Vin nom</option><option value="2">Vin max</option></select></label>
+        <label id="lLoadWrap">Load <input class="num" id="lLoad" type="text" value="100 %" style="width:84px" aria-label="Load in percent of Io max"></label>
+      </div>
+      <p class="hint" id="lStatus"></p>
+      <p class="warn" id="lWarn"></p>
+    </details>
+    <details class="sec" open>
+      <summary>Summary</summary>
+      <div class="lsum" id="lSum"></div>
+    </details>
+    <details class="sec" open>
+      <summary>What to look at</summary>
+      <ul class="tips" id="lTips"></ul>
+    </details>
+  </aside>
+  <section class="panel lwork">
+    <div class="lgrid">
+      <div>
+        <h2>Loss breakdown</h2>
+        <div id="lBars" role="list" aria-label="Losses by source, largest first"></div>
+      </div>
+      <div>
+        <div class="dresHead"><h2>Efficiency vs load</h2><span class="hint" id="eStatus"></span></div>
+        <p class="hint">The design at V<sub>in</sub> min, nom and max. D is solved at every point so V<sub>o</sub> stays on target. Hover or tap for values.</p>
+        <canvas id="effChart" aria-label="Efficiency versus load for three input voltages"></canvas>
+        <div class="legend" id="effLegend"></div>
+        <details><summary>Table view</summary><div class="tblWrap"><table class="data" id="effTbl"></table></div></details>
+      </div>
     </div>
-    <p class="warn" id="lWarn"></p>
-    <div class="lsum" id="lSum"></div>
-    <div id="lBars" role="list" aria-label="Losses by source, largest first"></div>
     <h3>Loss table</h3>
     <div class="tblWrap"><table class="data" id="lTbl"></table></div>
     <h3>Inductor core</h3>
     <div class="tblWrap"><table class="data" id="lCoreTbl"></table></div>
     <p class="hint">Switching, gate and core data come from the Design page components. Conduction losses come from the simulated waveforms.</p>
-  </section>
-  <section class="panel">
-    <div class="dresHead"><h2>Efficiency vs load</h2><span class="hint" id="eStatus"></span></div>
-    <p class="hint">The design at V<sub>in</sub> min, nom and max. D is solved at every point so V<sub>o</sub> stays on target. Hover or tap for values.</p>
-    <canvas id="effChart" aria-label="Efficiency versus load for three input voltages"></canvas>
-    <div class="legend" id="effLegend"></div>
-    <details><summary>Table view</summary><div class="tblWrap"><table class="data" id="effTbl"></table></div></details>
-    <h3>What to look at</h3>
-    <ul class="tips" id="lTips"></ul>
   </section>
 </main>
 

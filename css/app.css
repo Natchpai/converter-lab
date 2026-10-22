@@ -266,11 +266,12 @@ svg tspan.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px;
 /* ---- design page ---- */
 main.dlayout {
   display: grid; gap: 12px; padding: 12px 16px 24px; max-width: 1680px; margin: 0 auto;
-  grid-template-columns: 310px 340px minmax(0, 1fr); grid-template-areas: "spec comp res";
+  grid-template-columns: 340px minmax(0, 1fr); grid-template-areas: "side res";
 }
-@media (max-width: 1250px) { main.dlayout { grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: "spec res" "comp res"; } }
-@media (max-width: 820px) { main.dlayout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "spec" "comp" "res"; } }
-.dspec { grid-area: spec; align-self: start; } .dcomp { grid-area: comp; align-self: start; } .dres { grid-area: res; }
+@media (max-width: 820px) { main.dlayout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "side" "res"; } }
+.dside { grid-area: side; align-self: start; } .dres { grid-area: res; }
+.workHead { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
+.workHead .dActions { margin: 8px 0 0; }
 .frow { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
 .frow label { font-size: 15px; }
 .frow .num { width: 120px; }
@@ -291,8 +292,13 @@ table.data td.l small { color: var(--muted); }
 #printArea { display: none; }
 
 /* ---- losses page ---- */
-main.llayout { display: grid; gap: 12px; padding: 12px 16px 24px; max-width: 1680px; margin: 0 auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-@media (max-width: 1000px) { main.llayout { grid-template-columns: minmax(0, 1fr); } }
+main.llayout { display: grid; gap: 12px; padding: 12px 16px 24px; max-width: 1680px; margin: 0 auto; grid-template-columns: 320px minmax(0, 1fr); }
+@media (max-width: 820px) { main.llayout { grid-template-columns: minmax(0, 1fr); } }
+.lside { align-self: start; }
+.lside .dActions { margin-top: 2px; }
+.lside .tips { font-size: 14px; }
+.lgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 24px; }
+@media (max-width: 1250px) { .lgrid { grid-template-columns: minmax(0, 1fr); } }
 .lsum { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 8px 0 12px; }
 .lsum div { display: flex; flex-direction: column; }
 .lsum span { font-size: 13px; color: var(--muted); }
@@ -348,6 +354,7 @@ details:not(.sec):not(.about) summary { cursor: pointer; color: var(--muted); fo
   .screen canvas { position: absolute; inset: 0; }
   #bode { position: absolute; inset: 0; }
   main.dlayout { grid-template-rows: minmax(0, 1fr); }
-  main.dlayout > .panel { align-self: stretch; }
+  main.dlayout > .panel, main.llayout > .panel { align-self: stretch; }
+  .workHead { position: sticky; top: -12px; z-index: 1; background: var(--panel); margin: -12px -12px 4px; padding: 12px 12px 8px; }
   main.llayout { grid-template-rows: minmax(0, 1fr); }
 }
